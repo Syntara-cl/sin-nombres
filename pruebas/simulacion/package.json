@@ -1,0 +1,8 @@
+{
+  "name": "sin-nombres-simulacion",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "test": "node --test test/*.test.js" },
+  "engines": { "node": ">=24" },
+  "dependencies": { "@supabase/supabase-js": "2.45.4", "puppeteer-core": "25.16.0" }
+}
