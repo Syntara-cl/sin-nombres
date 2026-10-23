@@ -135,12 +135,14 @@ h1 em { font-style: normal; color: var(--accent-text); }
 .game-hud b { font-variant-numeric: tabular-nums; font-size: 1.35rem; color: var(--ink); }
 .arena { position: relative; height: 340px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 .arena-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; color: var(--dim); font-weight: 700; }
-.wall { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; gap: 10px; padding: 10px; pointer-events: none; }
-.wall .pic { overflow: hidden; border: 3px solid #6b4a2a; border-radius: 4px; box-shadow: inset 0 0 0 2px #2a1b0e, 0 4px 10px rgba(0,0,0,0.3); opacity: 0.3; }
-.wall .pic:nth-child(odd) { transform: rotate(-1.4deg); }
-.wall .pic:nth-child(even) { transform: rotate(1.1deg); }
-.wall img { display: block; width: 100%; height: 100%; object-fit: cover; filter: grayscale(0.55) sepia(0.3) hue-rotate(185deg) contrast(1.05); transition: opacity 0.9s; }
-.wall img.out { opacity: 0; }
+.wall { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.wall .pic { position: absolute; top: 9%; height: 82%; padding: 6px; background: #6b4a2a; border-radius: 4px; box-shadow: 0 8px 22px rgba(0,0,0,0.4), inset 0 0 0 2px #2a1b0e; opacity: 0; transform: rotate(-2deg) scale(0.96); transition: opacity 2.2s ease, transform 9s ease-out; }
+.wall .pic.l { left: 5%; }
+.wall .pic.r { right: 5%; transform: rotate(2deg) scale(0.96); }
+.wall .pic.show { opacity: 0.94; transform: rotate(-1deg) scale(1); }
+.wall .pic.r.show { transform: rotate(1deg) scale(1); }
+.arena.on .wall .pic.show { opacity: 0.5; }
+.wall img { display: block; height: 100%; width: auto; max-width: 62vw; filter: saturate(0.92) sepia(0.1); }
 .arena-msg { text-shadow: 0 0 8px var(--surface), 0 0 14px var(--surface); }
 .tgt { position: absolute; width: 58px; height: 58px; font-size: 2.5rem; line-height: 58px; text-align: center; border: 0; background: none; padding: 0; animation: pop 0.14s ease-out; }
 @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -765,14 +767,14 @@ img { max-width: 100%; }
     if (G.on) return;
     if (!me) { goStep1(); return; }
     if (!sb) { toast("No hay conexión con el servidor"); return; }
-    G.on = true; G.score = 0; gameShow();
+    G.on = true; G.score = 0; gameShow(); $("arena").classList.add("on");
     clearTargets(); $("arenaMsg").hidden = true; $("gMsg").textContent = ""; $("playBtn").disabled = true;
     $("arena").scrollIntoView({ block: "center", behavior: "auto" });
     spawnLoop();
   }
   function endGame(why) {
     if (!G.on) return;
-    G.on = false; clearTimeout(G.spawn); clearTargets();
+    G.on = false; clearTimeout(G.spawn); clearTargets(); $("arena").classList.remove("on");
     $("playBtn").disabled = false; $("playBtn").textContent = "Jugar otra vez";
     var m = $("arenaMsg"), final = G.score, id = me, name = nameOf(me);
     var prev = scores[id] ? scores[id].best : 0;
@@ -809,28 +811,23 @@ img { max-width: 100%; }
   /* Puente para el juego 3D (script aparte) */
   window.SN = { getMe: function () { return me; }, nameOf: nameOf, getSb: function () { return sb; }, goStep1: goStep1, toast: toast, fotos: FOTO_URLS };
 
-  /* Muro de retratos del Cazafantasmas: 8 marcos que cambian de foto solos; si una foto no carga, ese marco se oculta */
+  /* Retratos del Cazafantasmas: UNA foto a la vez, alternando lado; fundido lento, se queda bien visible y se desvanece. Durante la partida baja su intensidad para no estorbar */
   (function initWall() {
     var wall = $("wall"); if (!wall || !FOTO_URLS.length) return;
-    var order = FOTO_URLS.slice().sort(function () { return Math.random() - 0.5; }), k = 0, cells = [];
-    for (var i = 0; i < 8; i++) {
-      var box = document.createElement("div"), im = document.createElement("img");
-      box.className = "pic"; im.alt = ""; im.decoding = "async";
-      im.onload = (function (b) { return function () { b.style.visibility = ""; }; })(box);
-      im.onerror = (function (b) { return function () { b.style.visibility = "hidden"; }; })(box);
-      im.src = order[k++ % order.length]; box.appendChild(im); wall.appendChild(box); cells.push(im);
+    var order = FOTO_URLS.slice().sort(function () { return Math.random() - 0.5; }), k = 0, side = 0;
+    var pic = document.createElement("div"), im = document.createElement("img");
+    pic.className = "pic l"; im.alt = ""; pic.appendChild(im); wall.appendChild(pic);
+    function next() {
+      var url = order[k++ % order.length], pre = new Image();
+      pre.onload = function () {
+        side = 1 - side; pic.className = "pic " + (side ? "r" : "l"); im.src = url;
+        setTimeout(function () { pic.classList.add("show"); }, 60);
+        setTimeout(function () { pic.classList.remove("show"); setTimeout(next, 4500); }, 9000);
+      };
+      pre.onerror = function () { setTimeout(next, 6000); };
+      pre.src = url;
     }
-    setInterval(function () {
-      if (document.hidden) return;
-      var im = cells[Math.floor(Math.random() * cells.length)];
-      im.classList.add("out");
-      setTimeout(function () {
-        var next = order[k++ % order.length], pre = new Image();
-        pre.onload = function () { im.src = next; im.classList.remove("out"); };
-        pre.onerror = function () { im.classList.remove("out"); };
-        pre.src = next;
-      }, 950);
-    }, 2200);
+    setTimeout(next, 1500);
   })();
 
   /* Conexion a Supabase */
@@ -1179,59 +1176,56 @@ img { max-width: 100%; }
     pool.push({ g: pg, bot: pb, top: pt, x: 0, base: 0, amp: 0, ph: 0, gh: 2.4, on: false });
   }
 
-  /* Cuadros embrujados: retratos de la familia flotando en el fondo. Maximo 6 texturas vivas; si una foto no carga, el cuadro no aparece */
-  var urls = (SN.fotos || []).slice(), fotoK = 0, frames = [], bigF = null, photosOn = false;
+  /* Retratos de la familia: UN cuadro a la vez. Aparece con un fundido lento, se queda unos segundos bien visible, se desvanece y hay una pausa. Si la foto no carga, simplemente espera y reintenta */
+  var urls = (SN.fotos || []).slice(), fotoK = 0, photosOn = false, F = null, FS = { phase: "off", t: 0, wait: 0, big: false };
   var loader = new T.TextureLoader(); loader.setCrossOrigin("anonymous");
   var frameGeo = new T.BoxGeometry(1, 1, 0.1), picGeo = new T.PlaneGeometry(1, 1);
-  var frameMat = new T.MeshStandardMaterial({ color: 0x7a5530, roughness: 0.65, metalness: 0.25, flatShading: true });
   function edgeX(z) { return (14 - z) * 0.4142 * cam.aspect + 2.5; }
-  function makeFrame(big) {
-    var g = new T.Group(), fr = new T.Mesh(frameGeo, frameMat), pic = new T.Mesh(picGeo, new T.MeshBasicMaterial({ color: 0xb3bfff, transparent: true, opacity: 0.88 }));
-    pic.position.z = 0.06; g.add(fr); g.add(pic); g.visible = false; scene.add(g);
-    g.userData = { fr: fr, pic: pic, big: big, on: false, ph: Math.random() * 6.3, v: 0.5 + Math.random() * 0.6, k: 0.22, base: big ? 3.4 : 1.5 + Math.random() * 0.9, tex: null, token: 0 };
-    return g;
-  }
-  function setPhoto(g) {
-    var u = g.userData, token = ++u.token;
-    if (!urls.length) return;
-    var url = urls[fotoK++ % urls.length];
-    loader.load(url, function (tex) {
-      if (token !== u.token) { tex.dispose(); return; }
-      tex.encoding = T.sRGBEncoding; tex.generateMipmaps = false; tex.minFilter = T.LinearFilter;
-      if (u.tex) u.tex.dispose();
-      u.tex = tex; u.pic.material.map = tex; u.pic.material.needsUpdate = true;
-      var h = u.base, w = h * (tex.image.width / tex.image.height);
-      u.pic.scale.set(w, h, 1); u.fr.scale.set(w + 0.2, h + 0.2, 1);
-      g.visible = u.on;
-    }, undefined, function () { g.visible = false; });
-  }
-  function placeFrame(g, initial) {
-    var u = g.userData, z = u.big ? -2.2 : -2.8 - Math.random() * 3.4;
-    g.position.set(initial ? (Math.random() * 1.7 - 0.85) * (edgeX(z) - 2.5) : edgeX(z) + Math.random() * 5, u.big ? 0.8 + Math.random() * 1.2 : 0.4 + Math.random() * 4, z);
-    u.base = u.big ? 3.6 : 2 + Math.random() * 1.1; u.on = true; u.k = u.big ? 0.12 : 0.22;
-    setPhoto(g);
-  }
   function initPhotos() {
     if (photosOn || !urls.length) return; photosOn = true;
     urls.sort(function () { return Math.random() - 0.5; });
-    for (var i = 0; i < 6; i++) { var f = makeFrame(false); frames.push(f); placeFrame(f, true); }
-    bigF = makeFrame(true); bigF.userData.on = false;
+    var frameMat = new T.MeshStandardMaterial({ color: 0x7a5530, roughness: 0.65, metalness: 0.2, flatShading: true, transparent: true, opacity: 0 });
+    var picMat = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
+    var g = new T.Group(), fr = new T.Mesh(frameGeo, frameMat), pic = new T.Mesh(picGeo, picMat);
+    pic.position.z = 0.06; g.add(fr); g.add(pic); g.visible = false; scene.add(g);
+    F = { g: g, fr: fr, pic: pic, frameMat: frameMat, picMat: picMat, tex: null, loading: false };
+    FS.phase = "wait"; FS.wait = 3;
+  }
+  function showNext() {
+    if (!F || F.loading) return;
+    F.loading = true; FS.phase = "loading";
+    loader.load(urls[fotoK++ % urls.length], function (tex) {
+      tex.encoding = T.sRGBEncoding; tex.generateMipmaps = false; tex.minFilter = T.LinearFilter;
+      if (F.tex) F.tex.dispose();
+      F.tex = tex; F.picMat.map = tex; F.picMat.needsUpdate = true;
+      var z = -3.2, ex = edgeX(z) - 2.5, h = FS.big ? 3.7 : 2.9, w = Math.min(h * (tex.image.width / tex.image.height), ex * 0.9);
+      F.pic.scale.set(w, h, 1); F.fr.scale.set(w + 0.22, h + 0.22, 1);
+      F.g.position.set(ex * (0.15 + Math.random() * 0.45), (Math.random() - 0.5) * 3, z);
+      F.picMat.opacity = 0; F.frameMat.opacity = 0; F.g.visible = true;
+      FS.phase = "in"; FS.t = 0; F.loading = false;
+    }, undefined, function () { F.loading = false; FS.phase = "wait"; FS.wait = 6; });
   }
   function bigTrigger() {
-    if (!bigF || bigF.userData.on) return;
-    placeFrame(bigF, false);
-    $("fMsg").textContent = "📷 ¡Recuerdo de los " + (Math.floor(S.dist / 100) * 100) + " metros!";
+    if (!F) return;
+    FS.big = true; $("fMsg").textContent = "📷 ¡Recuerdo de los " + (Math.floor(S.dist / 100) * 100) + " metros!";
+    if (FS.phase === "wait") FS.wait = 0;
   }
   function stepFrames(dt, speedNow) {
-    var all = bigF ? frames.concat([bigF]) : frames;
-    all.forEach(function (g) {
-      var u = g.userData; if (!u.on) return;
-      g.position.x -= (u.v + speedNow * u.k) * dt;
-      g.rotation.z = Math.sin(S.t * 0.9 + u.ph) * 0.07; g.rotation.y = Math.sin(S.t * 0.6 + u.ph) * 0.18;
-      if (g.position.x < -(edgeX(g.position.z) + 2)) { if (u.big) { u.on = false; g.visible = false; } else placeFrame(g, false); }
-    });
+    if (!F) return;
+    var m = FS.phase;
+    if (m === "wait") { FS.wait -= dt; if (FS.wait <= 0) showNext(); return; }
+    if (m === "loading" || m === "off") return;
+    FS.t += dt;
+    var o = 1;
+    if (m === "in") { o = Math.min(1, FS.t / 2.4); if (FS.t >= 2.4) { FS.phase = "hold"; FS.t = 0; } }
+    else if (m === "hold") { if (FS.t >= 6) { FS.phase = "out"; FS.t = 0; } }
+    else if (m === "out") { o = Math.max(0, 1 - FS.t / 2.4); if (FS.t >= 2.4) { FS.phase = "wait"; FS.wait = 3.5 + Math.random() * 2.5; F.g.visible = false; FS.big = false; o = 0; } }
+    var e = o * o * (3 - 2 * o);
+    F.picMat.opacity = e * 0.97; F.frameMat.opacity = e;
+    F.g.position.x -= (0.22 + speedNow * 0.05) * dt;
+    F.g.rotation.z = Math.sin(S.t * 0.7) * 0.05; F.g.rotation.y = Math.sin(S.t * 0.5) * 0.12;
+    F.g.scale.setScalar(0.95 + 0.05 * e);
   }
-
   /* Estado del juego */
   var S = { mile: 0, mode: "idle", t: 0, y: 0, vy: 0, dist: 0, speed: 6, hold: false, next: 0, lastGy: 0, crashT: 0, shake: 0, emitT: 0 };
   function gyOf(p) { return p.base + p.amp * Math.sin(S.t * 1.5 + p.ph); }
