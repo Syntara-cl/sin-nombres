@@ -306,14 +306,16 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
     function score(v) {
       var l = v.lang.replace("_", "-").toLowerCase(), n = v.name.toLowerCase(), s = 0;
       if (/natural|neural|online/.test(n)) s += 50;
+      if (/jorge|alonso|gonzalo|ra[uú]l|diego|tom[aá]s|pablo|andr[eé]s|carlos|miguel|male|hombre/.test(n)) s += 25;   /* voz masculina conocida */
       if (l === "es-mx") s += 30; else if (l === "es-419") s += 29; else if (l === "es-us") s += 28; else if (/^es-(co|ar|cl|pe|ve|ec|uy|bo)/.test(l)) s += 20; else if (l === "es-es") s += 5; else s += 10;
       if (/google/.test(n)) s += 8;
       return s;
     }
+    var chosen = null; try { chosen = localStorage.getItem("eres_voice"); } catch (e) {}
+    function esVoices() { return window.speechSynthesis ? speechSynthesis.getVoices().filter(function (v) { return /^es/i.test(v.lang); }) : []; }
     function pickVoice() {
-      if (!window.speechSynthesis) return null;
-      var es = speechSynthesis.getVoices().filter(function (v) { return /^es/i.test(v.lang); });
-      if (!es.length) return null;
+      var es = esVoices(); if (!es.length) return null;
+      if (chosen) { var m = es.filter(function (v) { return v.name === chosen; })[0]; if (m) return m; }
       es.sort(function (a, b) { return score(b) - score(a); }); return es[0];
     }
     if (window.speechSynthesis) { voice = pickVoice(); speechSynthesis.onvoiceschanged = function () { voice = pickVoice(); }; }
@@ -341,6 +343,9 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
       setVol: function (v) { vol = v; if (master) master.gain.value = muted ? 0 : vol; },
       setMuted: function (m) { muted = m; if (master) master.gain.value = muted ? 0 : vol; if (m && cur && window.speechSynthesis) { try { speechSynthesis.cancel(); } catch (e) {} } },
       isMuted: function () { return muted; },
+      voices: function () { return esVoices().sort(function (a, b) { return score(b) - score(a); }).map(function (v) { return { name: v.name, lang: v.lang }; }); },
+      currentName: function () { return voice ? voice.name : ""; },
+      setVoice: function (n) { chosen = n; try { localStorage.setItem("eres_voice", n); } catch (e) {} voice = pickVoice(); },
       voiceName: function () { return voice ? voice.name + " (" + voice.lang + ")" : (window.speechSynthesis ? "voz predeterminada del navegador" : "este navegador no tiene voz"); }
     };
   })();
@@ -447,8 +452,10 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
           '<div class="card"><h2>Conectados (' + n + ')</h2><p></p>' + chips() + '</div>' +
           (S.notice ? '<div class="card" style="border-color:var(--bad)">' + esc(S.notice) + '</div>' : '') +
           '<div class="card tvbar"><label class="dim" for="cnt">Preguntas</label><select id="cnt"><option value="5">5</option><option value="8">8</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option><option value="30">30</option><option value="0">Todas (' + QUESTIONS.length + ')</option></select><button class="btn primary" id="go"' + (n < 2 ? " disabled" : "") + '>Empezar el juego</button><span class="dim">' + (n < 2 ? "Faltan jugadores (mínimo 2)." : "Todo listo.") + '</span></div>' +
-          '<div class="card tvbar"><button class="btn" id="tst">🔊 Probar voz y música</button><span class="dim">Voz: <span id="vn">' + esc(Snd.voiceName()) + '</span>. El sonido sale de este dispositivo: revisa el volumen del computador o del TV.</span></div>';
+          '<div class="card tvbar"><button class="btn" id="tst">🔊 Probar voz y música</button><label class="dim" for="vsel">Voz</label><select id="vsel"></select><span class="dim">El sonido sale de este dispositivo: revisa el volumen del computador o del TV. En Microsoft Edge suelen estar las voces más naturales.</span></div>';
         var go = document.getElementById("go"); if (go) go.onclick = function () { Snd.unlock(); Snd.musicStart(); start(parseInt(document.getElementById("cnt").value, 10)); };
+        document.getElementById("vsel").onchange = function () { Snd.setVoice(this.value); Snd.unlock(); Snd.say("Hola. Así suena esta voz. ¿Quién es más probable que se quede dormido en la fiesta?"); };
+        fillVoices();
         document.getElementById("tst").onclick = function () {
           Snd.unlock(); Snd.musicStart(); Snd.sting();
           Snd.say("Hola. Esta es la voz del juego. Si se escucha bien, ya pueden empezar.", function () { setTimeout(function () { if (S.phase === "lobby") Snd.musicStop(); }, 2500); });
@@ -486,14 +493,23 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
     }
     document.addEventListener("keydown", function (e) { if ((e.code === "Space" || e.code === "Enter") && S.phase === "reveal") { e.preventDefault(); nextQuestion(); } });
 
-    /* tictac en los ultimos 5 segundos y nombre de la voz en la sala */
+    /* lista de voces en espanol de este dispositivo (se rellena cuando el navegador las carga) */
+    function fillVoices() {
+      var sel = document.getElementById("vsel"); if (!sel) return;
+      var vs = Snd.voices(), cur = Snd.currentName(), sig = vs.length + "|" + cur;
+      if (sel.getAttribute("data-sig") === sig) return;
+      sel.setAttribute("data-sig", sig);
+      sel.innerHTML = vs.length ? vs.map(function (v) { return '<option value="' + esc(v.name) + '"' + (v.name === cur ? " selected" : "") + '>' + esc(v.name) + ' (' + esc(v.lang) + ')</option>'; }).join("") : '<option>Voz predeterminada del navegador</option>';
+    }
+
+    /* tictac en los ultimos 5 segundos */
     var lastTick = -1;
     setInterval(function () {
       if (S.phase === "question" && S.open) {
         var sec = Math.ceil((deadline - Date.now()) / 1000);
         if (sec <= 5 && sec > 0 && sec !== lastTick) { lastTick = sec; Snd.tick(sec); }
       } else lastTick = -1;
-      var vn = document.getElementById("vn"); if (vn) vn.textContent = Snd.voiceName();
+      fillVoices();
     }, 200);
 
     /* volumen y silencio (esquina superior derecha de la pantalla grande) */
