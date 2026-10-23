@@ -398,9 +398,9 @@ img { max-width: 100%; }
 
   <section class="step" id="juego">
     <div class="step-head"><span class="step-no">El desafío</span><h2>Cazafantasmas</h2></div>
-    <p class="lead">30 segundos. Toca los fantasmas 👻 y sumas 1. Si tocas una calabaza 🎃 o un murciélago 🦇 pierdes 2. Puedes jugar todas las veces que quieras: se guarda tu mejor puntaje y el sábado el número uno se lleva un sour extra.</p>
+    <p class="lead">Toca los fantasmas 👻 antes de que se escapen. El juego no tiene tiempo: termina en cuanto toques una calabaza 🎃 o un murciélago 🦇, o se te escape un fantasma, y cada vez va más rápido. Puedes jugar todas las veces que quieras: se guarda tu mejor puntaje y el sábado el número uno se lleva un sour extra.</p>
     <div class="game">
-      <div class="game-hud"><span>Tiempo <b id="gTime">30</b></span><span>Puntos <b id="gScore">0</b></span><span>Tu récord <b id="gBest">0</b></span></div>
+      <div class="game-hud"><span>Nivel <b id="gLevel">1</b></span><span>Puntos <b id="gScore">0</b></span><span>Tu récord <b id="gBest">0</b></span></div>
       <div class="arena" id="arena" aria-label="Zona de juego"><div class="arena-msg" id="arenaMsg">Elige tu nombre en el paso 1 y presiona Jugar</div></div>
       <div class="actions"><button class="btn primary" id="playBtn" data-act="play">Jugar</button><span class="pending" id="gMsg" aria-live="polite"></span></div>
     </div>
@@ -700,8 +700,8 @@ img { max-width: 100%; }
   }
   $("ans").addEventListener("keydown", function (e) { if (e.key === "Enter") solve(); });
 
-  /* Cazafantasmas: 30 s, mejor puntaje por persona en halloween_scores */
-  var scores = {}, G = { on: false, score: 0, left: 30, tick: null, spawn: null };
+  /* Cazafantasmas: sin limite de tiempo, termina al primer error; la dificultad sube con los puntos. Mejor puntaje por persona en halloween_scores */
+  var scores = {}, G = { on: false, score: 0, spawn: null };
   function renderRank() {
     var rows = Object.keys(scores).map(function (s) { return { s: s, n: scores[s].name, b: scores[s].best }; })
       .sort(function (a, b) { return b.b - a.b || a.n.localeCompare(b.n, "es"); }).slice(0, 10);
@@ -709,11 +709,13 @@ img { max-width: 100%; }
     $("rankEmpty").hidden = rows.length > 0;
     $("gBest").textContent = me && scores[me] ? scores[me].best : 0;
   }
-  function gameShow() { $("gTime").textContent = G.left; $("gScore").textContent = Math.max(0, G.score); }
+  function level() { return Math.floor(G.score / 8) + 1; }
+  function gameShow() { $("gLevel").textContent = level(); $("gScore").textContent = G.score; }
   function clearTargets() { var a = $("arena"); [].slice.call(a.querySelectorAll(".tgt")).forEach(function (t) { a.removeChild(t); }); }
   function addTarget() {
-    var a = $("arena"), el = Math.min(30, 30 - G.left), r = Math.random();
-    var kind = r < 0.62 ? "g" : r < 0.82 ? "p" : "b";
+    var a = $("arena"), r = Math.random();
+    var badShare = Math.min(0.5, 0.22 + G.score * 0.006);
+    var kind = r > badShare ? "g" : (Math.random() < 0.55 ? "p" : "b");
     var b = document.createElement("button");
     b.type = "button"; b.className = "tgt"; b.setAttribute("data-k", kind);
     b.setAttribute("aria-label", kind === "g" ? "Fantasma" : kind === "p" ? "Calabaza" : "Murciélago");
@@ -721,29 +723,33 @@ img { max-width: 100%; }
     b.style.left = Math.round(Math.random() * Math.max(0, a.clientWidth - 58)) + "px";
     b.style.top = Math.round(Math.random() * Math.max(0, a.clientHeight - 58)) + "px";
     a.appendChild(b);
-    setTimeout(function () { if (b.parentNode) b.parentNode.removeChild(b); }, Math.max(650, 1300 - el * 20));
+    setTimeout(function () {
+      if (!b.parentNode) return;
+      b.parentNode.removeChild(b);
+      if (G.on && kind === "g") endGame("Se te escapó un fantasma");
+    }, Math.max(620, 1700 - G.score * 16));
   }
   function spawnLoop() {
     if (!G.on) return;
     addTarget();
-    G.spawn = setTimeout(spawnLoop, Math.max(380, 800 - (30 - G.left) * 14));
+    G.spawn = setTimeout(spawnLoop, Math.max(330, 1000 - G.score * 11));
   }
   function startGame() {
     if (G.on) return;
     if (!me) { goStep1(); return; }
     if (!sb) { toast("No hay conexión con el servidor"); return; }
-    G.on = true; G.score = 0; G.left = 30; gameShow();
+    G.on = true; G.score = 0; gameShow();
     clearTargets(); $("arenaMsg").hidden = true; $("gMsg").textContent = ""; $("playBtn").disabled = true;
     $("arena").scrollIntoView({ block: "center", behavior: "auto" });
-    G.tick = setInterval(function () { G.left--; gameShow(); if (G.left <= 0) endGame(); }, 1000);
     spawnLoop();
   }
-  function endGame() {
-    G.on = false; clearInterval(G.tick); clearTimeout(G.spawn); clearTargets();
+  function endGame(why) {
+    if (!G.on) return;
+    G.on = false; clearTimeout(G.spawn); clearTargets();
     $("playBtn").disabled = false; $("playBtn").textContent = "Jugar otra vez";
-    var m = $("arenaMsg"), final = Math.max(0, G.score), id = me, name = nameOf(me);
+    var m = $("arenaMsg"), final = G.score, id = me, name = nameOf(me);
     var prev = scores[id] ? scores[id].best : 0;
-    m.hidden = false; m.textContent = "Hiciste " + final + (final === 1 ? " punto" : " puntos");
+    m.hidden = false; m.textContent = why + ". Hiciste " + final + (final === 1 ? " punto" : " puntos");
     if (final > prev) {
       scores[id] = { name: name, best: final }; renderRank();
       $("gMsg").textContent = "Guardando tu récord...";
@@ -758,13 +764,12 @@ img { max-width: 100%; }
     var t = e.target.closest ? e.target.closest(".tgt") : null;
     if (!t || !G.on) return;
     e.preventDefault();
-    var good = t.getAttribute("data-k") === "g";
-    G.score += good ? 1 : -2;
-    if (!good && navigator.vibrate) navigator.vibrate(80);
+    var k = t.getAttribute("data-k");
     if (t.parentNode) t.parentNode.removeChild(t);
-    gameShow();
+    if (k === "g") { G.score++; gameShow(); return; }
+    if (navigator.vibrate) navigator.vibrate(80);
+    endGame(k === "p" ? "Tocaste una calabaza" : "Tocaste un murciélago");
   });
-
   var d = Math.ceil((FECHA - new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) / 86400000);
   $("countdown").textContent = d > 1 ? "Faltan " + d + " días" : d === 1 ? "Es mañana" : d === 0 ? "Es hoy" : "Ya pasó la junta";
 
