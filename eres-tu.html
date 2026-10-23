@@ -208,6 +208,7 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
   var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
   var slug = function (n) { return n.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40); };
   var seedBySlug = {}; SEED.forEach(function (n) { seedBySlug[slug(n)] = n; });
+  if (P.get("sala")) CH = "eres-tu-v1-" + slug(P.get("sala"));   /* sala aparte para pruebas: ?sala=prueba no se mezcla con la sala real */
   var shuffle = function (a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; };
   if (TV) document.body.classList.add("tv");
 
