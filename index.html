@@ -135,6 +135,13 @@ h1 em { font-style: normal; color: var(--accent-text); }
 .game-hud b { font-variant-numeric: tabular-nums; font-size: 1.35rem; color: var(--ink); }
 .arena { position: relative; height: 340px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 .arena-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; color: var(--dim); font-weight: 700; }
+.wall { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; gap: 10px; padding: 10px; pointer-events: none; }
+.wall .pic { overflow: hidden; border: 3px solid #6b4a2a; border-radius: 4px; box-shadow: inset 0 0 0 2px #2a1b0e, 0 4px 10px rgba(0,0,0,0.3); opacity: 0.38; }
+.wall .pic:nth-child(odd) { transform: rotate(-1.4deg); }
+.wall .pic:nth-child(even) { transform: rotate(1.1deg); }
+.wall img { display: block; width: 100%; height: 100%; object-fit: cover; filter: grayscale(0.55) sepia(0.3) hue-rotate(185deg) contrast(1.05); transition: opacity 0.9s; }
+.wall img.out { opacity: 0; }
+.arena-msg { text-shadow: 0 0 8px var(--surface), 0 0 14px var(--surface); }
 .tgt { position: absolute; width: 58px; height: 58px; font-size: 2.5rem; line-height: 58px; text-align: center; border: 0; background: none; padding: 0; animation: pop 0.14s ease-out; }
 @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .rank { list-style: none; counter-reset: r; padding: 0; margin: 0; display: grid; gap: 6px; max-width: 420px; }
@@ -407,7 +414,7 @@ img { max-width: 100%; }
     <p class="lead">Toca los fantasmas 👻 antes de que se escapen. El juego no tiene tiempo: termina en cuanto toques una calabaza 🎃 o un murciélago 🦇, o se te escape un fantasma, y cada vez va más rápido. Puedes jugar todas las veces que quieras: se guarda tu mejor puntaje y el sábado el número uno se lleva un sour extra.</p>
     <div class="game">
       <div class="game-hud"><span>Nivel <b id="gLevel">1</b></span><span>Puntos <b id="gScore">0</b></span><span>Tu récord <b id="gBest">0</b></span></div>
-      <div class="arena" id="arena" aria-label="Zona de juego"><div class="arena-msg" id="arenaMsg">Elige tu nombre en el paso 1 y presiona Jugar</div></div>
+      <div class="arena" id="arena" aria-label="Zona de juego"><div class="wall" id="wall" aria-hidden="true"></div><div class="arena-msg" id="arenaMsg">Elige tu nombre en el paso 1 y presiona Jugar</div></div>
       <div class="actions"><button class="btn primary" id="playBtn" data-act="play">Jugar</button><span class="pending" id="gMsg" aria-live="polite"></span></div>
     </div>
     <h3>Ranking</h3>
@@ -795,8 +802,36 @@ img { max-width: 100%; }
 
   renderAll();
 
+  /* Fotos de la familia: viven en Supabase Storage (bucket publico "fotos"), no en el repositorio */
+  var FOTO_URLS = [];
+  if (SUPABASE_URL.indexOf("http") === 0) for (var fi = 1; fi <= 25; fi++) FOTO_URLS.push(SUPABASE_URL + "/storage/v1/object/public/fotos/f" + (fi < 10 ? "0" : "") + fi + ".jpg");
+
   /* Puente para el juego 3D (script aparte) */
-  window.SN = { getMe: function () { return me; }, nameOf: nameOf, getSb: function () { return sb; }, goStep1: goStep1, toast: toast };
+  window.SN = { getMe: function () { return me; }, nameOf: nameOf, getSb: function () { return sb; }, goStep1: goStep1, toast: toast, fotos: FOTO_URLS };
+
+  /* Muro de retratos del Cazafantasmas: 8 marcos que cambian de foto solos; si una foto no carga, ese marco se oculta */
+  (function initWall() {
+    var wall = $("wall"); if (!wall || !FOTO_URLS.length) return;
+    var order = FOTO_URLS.slice().sort(function () { return Math.random() - 0.5; }), k = 0, cells = [];
+    for (var i = 0; i < 8; i++) {
+      var box = document.createElement("div"), im = document.createElement("img");
+      box.className = "pic"; im.alt = ""; im.decoding = "async";
+      im.onload = (function (b) { return function () { b.style.visibility = ""; }; })(box);
+      im.onerror = (function (b) { return function () { b.style.visibility = "hidden"; }; })(box);
+      im.src = order[k++ % order.length]; box.appendChild(im); wall.appendChild(box); cells.push(im);
+    }
+    setInterval(function () {
+      if (document.hidden) return;
+      var im = cells[Math.floor(Math.random() * cells.length)];
+      im.classList.add("out");
+      setTimeout(function () {
+        var next = order[k++ % order.length], pre = new Image();
+        pre.onload = function () { im.src = next; im.classList.remove("out"); };
+        pre.onerror = function () { im.classList.remove("out"); };
+        pre.src = next;
+      }, 950);
+    }, 2200);
+  })();
 
   /* Conexion a Supabase */
   function pull() {
@@ -1144,8 +1179,61 @@ img { max-width: 100%; }
     pool.push({ g: pg, bot: pb, top: pt, x: 0, base: 0, amp: 0, ph: 0, gh: 2.4, on: false });
   }
 
+  /* Cuadros embrujados: retratos de la familia flotando en el fondo. Maximo 6 texturas vivas; si una foto no carga, el cuadro no aparece */
+  var urls = (SN.fotos || []).slice(), fotoK = 0, frames = [], bigF = null, photosOn = false;
+  var loader = new T.TextureLoader(); loader.setCrossOrigin("anonymous");
+  var frameGeo = new T.BoxGeometry(1, 1, 0.1), picGeo = new T.PlaneGeometry(1, 1);
+  var frameMat = new T.MeshStandardMaterial({ color: 0x7a5530, roughness: 0.65, metalness: 0.25, flatShading: true });
+  function edgeX(z) { return (14 - z) * 0.4142 * cam.aspect + 2.5; }
+  function makeFrame(big) {
+    var g = new T.Group(), fr = new T.Mesh(frameGeo, frameMat), pic = new T.Mesh(picGeo, new T.MeshBasicMaterial({ color: 0xb3bfff, transparent: true, opacity: 0.88 }));
+    pic.position.z = 0.06; g.add(fr); g.add(pic); g.visible = false; scene.add(g);
+    g.userData = { fr: fr, pic: pic, big: big, on: false, ph: Math.random() * 6.3, v: 0.5 + Math.random() * 0.6, k: 0.22, base: big ? 3.4 : 1.5 + Math.random() * 0.9, tex: null, token: 0 };
+    return g;
+  }
+  function setPhoto(g) {
+    var u = g.userData, token = ++u.token;
+    if (!urls.length) return;
+    var url = urls[fotoK++ % urls.length];
+    loader.load(url, function (tex) {
+      if (token !== u.token) { tex.dispose(); return; }
+      tex.encoding = T.sRGBEncoding; tex.generateMipmaps = false; tex.minFilter = T.LinearFilter;
+      if (u.tex) u.tex.dispose();
+      u.tex = tex; u.pic.material.map = tex; u.pic.material.needsUpdate = true;
+      var h = u.base, w = h * (tex.image.width / tex.image.height);
+      u.pic.scale.set(w, h, 1); u.fr.scale.set(w + 0.2, h + 0.2, 1);
+      g.visible = u.on;
+    }, undefined, function () { g.visible = false; });
+  }
+  function placeFrame(g, initial) {
+    var u = g.userData, z = u.big ? -2.2 : -3.2 - Math.random() * 4;
+    g.position.set(initial ? (Math.random() * 2 - 0.5) * edgeX(z) : edgeX(z) + Math.random() * 6, u.big ? 0.8 + Math.random() * 1.2 : 0.2 + Math.random() * 4.2, z);
+    u.base = u.big ? 3.4 : 1.4 + Math.random() * 0.9; u.on = true; u.k = u.big ? 0.12 : 0.22;
+    setPhoto(g);
+  }
+  function initPhotos() {
+    if (photosOn || !urls.length) return; photosOn = true;
+    urls.sort(function () { return Math.random() - 0.5; });
+    for (var i = 0; i < 5; i++) { var f = makeFrame(false); frames.push(f); placeFrame(f, true); }
+    bigF = makeFrame(true); bigF.userData.on = false;
+  }
+  function bigTrigger() {
+    if (!bigF || bigF.userData.on) return;
+    placeFrame(bigF, false);
+    $("fMsg").textContent = "📷 ¡Recuerdo de los " + (Math.floor(S.dist / 100) * 100) + " metros!";
+  }
+  function stepFrames(dt, speedNow) {
+    var all = bigF ? frames.concat([bigF]) : frames;
+    all.forEach(function (g) {
+      var u = g.userData; if (!u.on) return;
+      g.position.x -= (u.v + speedNow * u.k) * dt;
+      g.rotation.z = Math.sin(S.t * 0.9 + u.ph) * 0.07; g.rotation.y = Math.sin(S.t * 0.6 + u.ph) * 0.18;
+      if (g.position.x < -(edgeX(g.position.z) + 2)) { if (u.big) { u.on = false; g.visible = false; } else placeFrame(g, false); }
+    });
+  }
+
   /* Estado del juego */
-  var S = { mode: "idle", t: 0, y: 0, vy: 0, dist: 0, speed: 6, hold: false, next: 0, lastGy: 0, crashT: 0, shake: 0, emitT: 0 };
+  var S = { mile: 0, mode: "idle", t: 0, y: 0, vy: 0, dist: 0, speed: 6, hold: false, next: 0, lastGy: 0, crashT: 0, shake: 0, emitT: 0 };
   function gyOf(p) { return p.base + p.amp * Math.sin(S.t * 1.5 + p.ph); }
   function layout(p) { var gy = gyOf(p); place(p.bot, gy - p.gh, 1); place(p.top, gy + p.gh, -1); p.g.position.x = p.x; }
   function spawn() {
@@ -1185,7 +1273,7 @@ img { max-width: 100%; }
     if (S.mode !== "idle") return;
     if (!me()) { if (SN.goStep1) SN.goStep1(); return; }
     if (!(SN.getSb && SN.getSb())) { if (SN.toast) SN.toast("No hay conexión con el servidor"); return; }
-    clearPillars(); S.mode = "play"; S.t = 0; S.y = 0; S.vy = 0; S.dist = 0; S.speed = 6; S.next = 0; S.lastGy = 0; S.hold = false; S.shake = 0;
+    clearPillars(); S.mode = "play"; S.t = 0; S.y = 0; S.vy = 0; S.dist = 0; S.speed = 6; S.next = 0; S.lastGy = 0; S.hold = false; S.shake = 0; S.mile = 0;
     body.rotation.z = 0; witch.rotation.z = 0; showMeters();
     S.wait = true; $("flyMsg").hidden = false; $("flyMsg").textContent = "Toca la pantalla y mantén el dedo apretado para despegar"; $("fMsg").textContent = ""; $("flyPlay").disabled = true; box.classList.add("playing");
     box.scrollIntoView({ block: "center", behavior: "auto" });
@@ -1218,6 +1306,7 @@ img { max-width: 100%; }
     } else if (S.mode === "play") {
       S.speed = Math.min(15, 6 + S.dist * 0.011); speedNow = S.speed;
       S.dist += S.speed * dt;
+      var mile = Math.floor(S.dist / 100); if (mile > S.mile) { S.mile = mile; bigTrigger(); }
       S.vy += (S.hold ? 24 : -22) * dt; S.vy *= 1 - 1.1 * dt; S.vy = clamp(S.vy, -6.8, 6.8);
       S.y += S.vy * dt;
       S.next -= S.speed * dt; if (S.next <= 0) spawn();
@@ -1256,12 +1345,13 @@ img { max-width: 100%; }
     }
     mg2.attributes.position.needsUpdate = true;
     starM.opacity = 0.75 + 0.2 * Math.sin(S.t * 1.7);
+    stepFrames(dt, speedNow);
     stepParticles(dt);
     renderer.render(scene, cam);
     raf = requestAnimationFrame(frame);
   }
   function kick() { if (!raf && visible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } }
-  if ("IntersectionObserver" in window) new IntersectionObserver(function (en) { visible = en[0].isIntersecting; if (visible) kick(); }).observe(box);
+  if ("IntersectionObserver" in window) new IntersectionObserver(function (en) { visible = en[0].isIntersecting; if (visible) { initPhotos(); kick(); } }).observe(box); else initPhotos();
   document.addEventListener("visibilitychange", kick);
   window.addEventListener("resize", size);
   if ("ResizeObserver" in window) new ResizeObserver(size).observe(box);
