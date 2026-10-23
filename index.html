@@ -222,7 +222,8 @@ tr:last-child td { border-bottom: 0; }
 td.n { font-family: var(--f-hand); color: var(--accent-text); white-space: nowrap; }
 .pending { margin-top: 12px; color: var(--dim); }
 .pending b { color: var(--ink); }
-.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
+.actions .pending { margin: 0; }
 footer { padding-block: 40px 56px; color: var(--dim); text-align: center; font-size: 0.95rem; }
 footer .f { font-family: var(--f-display); font-size: 1.5rem; color: var(--ink); display: block; }
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 700; z-index: 40; max-width: calc(100% - 32px); }
@@ -339,6 +340,7 @@ img { max-width: 100%; }
     <div class="step-head"><span class="step-no">Paso 3</span><h2>¿Qué haces tú?</h2></div>
     <p class="lead">Cocinar, ornamentar, limpiar. Puedes tomar más de una tarea.</p>
     <div class="items" id="tasks"></div>
+    <div class="actions"><button class="btn primary" data-act="save">Guardar mis respuestas</button><span class="pending" id="saveMsg" aria-live="polite"></span></div>
   </section>
 
   <section class="step" id="paso5">
@@ -468,15 +470,24 @@ img { max-width: 100%; }
     else toast("No se pudo guardar. Intenta de nuevo.");
   }
   function save(patch) {
-    if (!db || !me) return;
-    if (!canWrite) { toast("Tu acceso es solo de lectura"); return; }
+    if (!db || !me) return Promise.resolve(false);
+    if (!canWrite) { toast("Tu acceso es solo de lectura"); return Promise.resolve(false); }
     var base = people[me] || { name: nameOf(me), bring: [], tasks: [], going: true };
     var cur = Object.assign({}, base, patch);
     people[me] = cur;
     renderAll();
     var id = me;
     inflight++; holdUntil = Date.now() + 1500;
-    queue = queue.then(function () { return sb.from("halloween_signups").upsert({ slug: id, data: cur, updated_at: new Date().toISOString() }); }).then(function (r) { if (r && r.error) throw r.error; }).catch(handleErr).then(function () { inflight--; holdUntil = Date.now() + 800; });
+    queue = queue.then(function () { return sb.from("halloween_signups").upsert({ slug: id, data: cur, updated_at: new Date().toISOString() }); }).then(function (r) { if (r && r.error) throw r.error; return true; }).catch(function (e) { handleErr(e); return false; }).then(function (ok) { inflight--; holdUntil = Date.now() + 800; return ok; });
+    return queue;
+  }
+  function saveNow() {
+    clearTimeout(timers.extra);
+    var msg = $("saveMsg"); msg.textContent = "Guardando...";
+    save({ extra: $("extra").value.slice(0, 80) }).then(function (ok) {
+      if (ok) { msg.textContent = "Guardado ✓ " + new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }); toast("Guardado, " + nameOf(me)); }
+      else msg.textContent = "No se pudo guardar. Intenta de nuevo.";
+    });
   }
   var timers = {};
   function saveLater(key, patch) {
@@ -598,6 +609,7 @@ img { max-width: 100%; }
     if (act === "hint") { var ht = $("hintText"); ht.hidden = !ht.hidden; return; }
     if (act === "solve") { solve(); return; }
     if (!me) { goStep1(); return; }
+    if (act === "save") { saveNow(); return; }
     var p = people[me] || {};
     if (act === "bring" || act === "task") {
       var key = act === "bring" ? "bring" : "tasks", id = el.getAttribute("data-id");
