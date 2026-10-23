@@ -1187,12 +1187,16 @@ img { max-width: 100%; }
     if (!(SN.getSb && SN.getSb())) { if (SN.toast) SN.toast("No hay conexión con el servidor"); return; }
     clearPillars(); S.mode = "play"; S.t = 0; S.y = 0; S.vy = 0; S.dist = 0; S.speed = 6; S.next = 0; S.lastGy = 0; S.hold = false; S.shake = 0;
     body.rotation.z = 0; witch.rotation.z = 0; showMeters();
-    $("flyMsg").hidden = true; $("fMsg").textContent = ""; $("flyPlay").disabled = true; box.classList.add("playing");
+    S.wait = true; $("flyMsg").hidden = false; $("flyMsg").textContent = "Toca la pantalla y mantén el dedo apretado para despegar"; $("fMsg").textContent = ""; $("flyPlay").disabled = true; box.classList.add("playing");
     box.scrollIntoView({ block: "center", behavior: "auto" });
   }
 
   /* Controles: mantener = subir, soltar = bajar */
-  function hold(v) { if (S.mode === "play") S.hold = v; }
+  function hold(v) {
+    if (S.mode !== "play") return;
+    if (v && S.wait) { S.wait = false; $("flyMsg").hidden = true; }
+    S.hold = v;
+  }
   box.addEventListener("pointerdown", function (e) { if (S.mode !== "play") return; e.preventDefault(); hold(true); try { box.setPointerCapture(e.pointerId); } catch (x) {} });
   box.addEventListener("pointerup", function () { hold(false); });
   box.addEventListener("pointercancel", function () { hold(false); });
@@ -1209,7 +1213,9 @@ img { max-width: 100%; }
     S.t += dt;
     var speedNow = S.mode === "play" ? S.speed : S.mode === "crash" ? 0 : 2.2;
 
-    if (S.mode === "play") {
+    if (S.mode === "play" && S.wait) {
+      S.y = Math.sin(S.t * 2) * 0.35; S.vy = 0; speedNow = 2.2;
+    } else if (S.mode === "play") {
       S.speed = Math.min(15, 6 + S.dist * 0.011); speedNow = S.speed;
       S.dist += S.speed * dt;
       S.vy += (S.hold ? 24 : -22) * dt; S.vy *= 1 - 1.1 * dt; S.vy = clamp(S.vy, -6.8, 6.8);
