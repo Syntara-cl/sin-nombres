@@ -637,6 +637,12 @@ img { max-width: 100%; }
   var winner = null;
   function cyrb53(str) { var h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (var i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return 4294967296 * (2097151 & h2) + (h1 >>> 0); }
   function norm(s) { return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z ]/g, " ").trim().replace(/\s+/g, " "); }
+  /* Correcta si la respuesta es una de las aceptadas o contiene la palabra clave (ACCEPT[0], 6 letras) en cualquier parte */
+  function isCorrect(v) {
+    if (ACCEPT.indexOf(cyrb53(v)) > -1) return true;
+    for (var i = 0; i + 6 <= v.length; i++) if (cyrb53(v.substr(i, 6)) === ACCEPT[0]) return true;
+    return false;
+  }
   function renderRiddle() {
     var w = $("riddleWin"), f = $("riddleForm");
     if (winner) { w.hidden = false; w.innerHTML = '<b>' + esc(winner.name) + '</b> resolvió el acertijo y se ganó el sour extra. El mejor sour del mundo ya tiene dueño.'; f.hidden = true; }
@@ -647,7 +653,7 @@ img { max-width: 100%; }
     if (winner) { toast("El acertijo ya fue resuelto"); return; }
     if (!v) { inp.focus(); return; }
     if (!me) { goStep1(); return; }
-    if (ACCEPT.indexOf(cyrb53(v)) < 0) { fb.textContent = "Esa no es. Sigue intentando."; return; }
+    if (!isCorrect(v)) { fb.textContent = "Esa no es. Sigue intentando."; return; }
     fb.textContent = ""; claim();
   }
   async function claim() {
