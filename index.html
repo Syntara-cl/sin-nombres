@@ -1198,9 +1198,9 @@ img { max-width: 100%; }
       tex.encoding = T.sRGBEncoding; tex.generateMipmaps = false; tex.minFilter = T.LinearFilter;
       if (F.tex) F.tex.dispose();
       F.tex = tex; F.picMat.map = tex; F.picMat.needsUpdate = true;
-      var z = -3.2, ex = edgeX(z) - 2.5, h = FS.big ? 3.7 : 2.9, w = Math.min(h * (tex.image.width / tex.image.height), ex * 0.9);
+      var z = -3.2, ex = edgeX(z) - 2.5, h = FS.big ? 5.6 : 4.4, w = Math.min(h * (tex.image.width / tex.image.height), ex * 0.9);
       F.pic.scale.set(w, h, 1); F.fr.scale.set(w + 0.22, h + 0.22, 1);
-      F.g.position.set(ex * (0.15 + Math.random() * 0.45), (Math.random() - 0.5) * 3, z);
+      F.g.position.set(ex * (0.15 + Math.random() * 0.4), (Math.random() - 0.5) * 2.2, z);
       F.picMat.opacity = 0; F.frameMat.opacity = 0; F.g.visible = true;
       FS.phase = "in"; FS.t = 0; F.loading = false;
     }, undefined, function () { F.loading = false; FS.phase = "wait"; FS.wait = 6; });
