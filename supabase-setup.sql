@@ -58,3 +58,22 @@ create policy halloween_scores_update on public.halloween_scores for update to a
 grant select, insert, update on public.halloween_scores to anon;
 
 alter publication supabase_realtime add table public.halloween_scores;
+
+create table if not exists public.halloween_scores_vuelo (
+  slug text primary key,
+  name text not null,
+  best int not null default 0 check (best >= 0),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.halloween_scores_vuelo enable row level security;
+
+drop policy if exists halloween_scores_vuelo_select on public.halloween_scores_vuelo;
+drop policy if exists halloween_scores_vuelo_insert on public.halloween_scores_vuelo;
+drop policy if exists halloween_scores_vuelo_update on public.halloween_scores_vuelo;
+
+create policy halloween_scores_vuelo_select on public.halloween_scores_vuelo for select to anon using (true);
+create policy halloween_scores_vuelo_insert on public.halloween_scores_vuelo for insert to anon with check (true);
+create policy halloween_scores_vuelo_update on public.halloween_scores_vuelo for update to anon using (true) with check (true);
+
+grant select, insert, update on public.halloween_scores_vuelo to anon;
