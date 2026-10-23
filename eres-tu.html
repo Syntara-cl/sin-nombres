@@ -69,6 +69,9 @@ input[type="text"] { font: inherit; background: var(--surface2); color: var(--in
 .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--line); margin-right: 6px; }
 .dot.on { background: var(--good); }
 a { color: var(--accent); }
+#snd { position: fixed; top: 12px; right: 12px; z-index: 50; display: flex; gap: 8px; align-items: center; background: rgba(32,24,48,0.88); border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+#snd .btn { padding: 4px 10px; }
+#snd input[type="range"] { width: 110px; accent-color: var(--accent); }
 
 /* Pantalla grande */
 body.tv { font-size: clamp(20px, 2.2vw, 34px); }
@@ -212,6 +215,136 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
   if (!sb) { $app.innerHTML = '<div class="card">No se pudo cargar el juego. Revisa tu conexión y recarga la página.</div>'; return; }
   var header = '<div class="brand"><span>¿Quién es más probable?</span><small>Los Sin Nombres</small></div>';
 
+  /* ====================== SONIDO (solo la pantalla grande) ======================
+     Musica y efectos generados por codigo (sin archivos ni derechos de autor) + narracion con la voz en espanol del navegador. */
+  var Snd = (function () {
+    var ctx = null, master = null, mus = null, sfx = null, vol = 0.7, muted = false, timer = null, playing = false, duckOn = false;
+    var step = 0, bar = 0, nextT = 0, noiseBuf = null, voice = null, cur = null;
+    var STEP = 60 / 108 / 4, MUS = 0.38, DUCK = 0.1;
+    var ROOTS = [45, 41, 43, 40], CHORDS = [[57, 60, 64, 69], [53, 57, 60, 65], [55, 59, 62, 67], [52, 56, 59, 64]];
+    var BASSPAT = { 0: 0, 3: 0, 6: 12, 8: 0, 11: 0, 14: 12 }, ARPPAT = [0, 1, 2, 3, 2, 1, 2, 3, 0, 1, 2, 3, 2, 1, 3, 2];
+    var f = function (m) { return 440 * Math.pow(2, (m - 69) / 12); };
+
+    function init() {
+      if (ctx) { if (ctx.state === "suspended") ctx.resume(); return; }
+      var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      ctx = new AC();
+      master = ctx.createGain(); master.gain.value = muted ? 0 : vol; master.connect(ctx.destination);
+      mus = ctx.createGain(); mus.gain.value = MUS; mus.connect(master);
+      sfx = ctx.createGain(); sfx.gain.value = 0.7; sfx.connect(master);
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      var d = noiseBuf.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    function osc(type, freq, t, dur, v, dest, o) {
+      o = o || {};
+      var s = ctx.createOscillator(), g = ctx.createGain(); s.type = type; s.frequency.setValueAtTime(freq, t);
+      if (o.to) s.frequency.exponentialRampToValueAtTime(o.to, t + dur);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + (o.attack || 0.005)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      var node = s;
+      if (o.filter) { var fl = ctx.createBiquadFilter(); fl.type = "lowpass"; fl.frequency.value = o.filter; s.connect(fl); node = fl; }
+      node.connect(g); g.connect(dest); s.start(t); s.stop(t + dur + 0.05);
+    }
+    function noise(t, dur, v, type, freq, dest) {
+      var s = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain();
+      s.buffer = noiseBuf; fl.type = type; fl.frequency.value = freq;
+      g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      s.connect(fl); fl.connect(g); g.connect(dest); s.start(t); s.stop(t + dur + 0.02);
+    }
+    function schedule(s, t) {
+      var b = bar % 4, chord = CHORDS[b], len = STEP * 16;
+      if (s === 0) {
+        chord.slice(0, 3).forEach(function (m, i) {                                    /* colchon de acordes */
+          var o = ctx.createOscillator(), g = ctx.createGain(), fl = ctx.createBiquadFilter();
+          o.type = "sawtooth"; o.frequency.value = f(m - 12) * (1 + (i - 1) * 0.004); fl.type = "lowpass"; fl.frequency.value = 800;
+          g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05, t + 0.5); g.gain.linearRampToValueAtTime(0.0001, t + len);
+          o.connect(fl); fl.connect(g); g.connect(mus); o.start(t); o.stop(t + len + 0.05);
+        });
+        if (b === 2) {                                                                   /* voz de fantasma con vibrato */
+          var o2 = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain(), g2 = ctx.createGain();
+          o2.type = "sine"; o2.frequency.setValueAtTime(f(81), t); o2.frequency.linearRampToValueAtTime(f(80), t + STEP * 12);
+          lfo.frequency.value = 5.5; lg.gain.value = 6; lfo.connect(lg); lg.connect(o2.frequency);
+          g2.gain.setValueAtTime(0.0001, t); g2.gain.linearRampToValueAtTime(0.05, t + 0.6); g2.gain.linearRampToValueAtTime(0.0001, t + STEP * 14);
+          o2.connect(g2); g2.connect(mus); o2.start(t); lfo.start(t); o2.stop(t + STEP * 14 + 0.05); lfo.stop(t + STEP * 14 + 0.05);
+        }
+      }
+      if (BASSPAT[s] != null) osc("sawtooth", f(ROOTS[b] + BASSPAT[s]), t, STEP * 2.2, 0.16, mus, { filter: 420 });
+      osc("triangle", f(chord[ARPPAT[s]] + 12), t, STEP * 1.6, s % 4 === 0 ? 0.075 : 0.05, mus);
+      if (s === 0 || s === 8) osc("sine", 130, t, 0.2, 0.5, mus, { to: 45 });
+      if (s === 4 || s === 12) noise(t, 0.13, 0.12, "bandpass", 1800, mus);
+      if (s % 4 === 2) noise(t, 0.04, 0.05, "highpass", 7000, mus);
+    }
+    function pump() { while (nextT < ctx.currentTime + 0.25) { schedule(step, nextT); nextT += STEP; step++; if (step === 16) { step = 0; bar++; } } }
+    function musicStart() {
+      init(); if (!ctx || playing) return;
+      playing = true; step = 0; bar = 0; nextT = ctx.currentTime + 0.1;
+      mus.gain.cancelScheduledValues(ctx.currentTime); mus.gain.setValueAtTime(0.0001, ctx.currentTime);
+      mus.gain.linearRampToValueAtTime(duckOn ? DUCK : MUS, ctx.currentTime + 1.5);
+      timer = setInterval(pump, 60);
+    }
+    function musicStop() {
+      if (!playing) return; playing = false; clearInterval(timer);
+      if (ctx) { mus.gain.cancelScheduledValues(ctx.currentTime); mus.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4); }
+    }
+    function duck(on) {
+      duckOn = on;
+      if (ctx && playing) { mus.gain.cancelScheduledValues(ctx.currentTime); mus.gain.setTargetAtTime(on ? DUCK : MUS, ctx.currentTime, 0.25); }
+    }
+    function tick(sec) { if (ctx) osc("square", sec <= 1 ? 1400 : 1000, ctx.currentTime, 0.07, 0.18, sfx); }
+    function pop() { if (ctx) osc("sine", 520, ctx.currentTime, 0.1, 0.25, sfx, { to: 900 }); }
+    function sting() {
+      if (!ctx) return; var t = ctx.currentTime;
+      [523, 659, 784].forEach(function (fr, i) { osc("triangle", fr, t + i * 0.09, 0.35, 0.22, sfx); });
+      osc("sine", 110, t, 0.45, 0.6, sfx, { to: 55 });
+    }
+    function fanfare() {
+      if (!ctx) return; var t = ctx.currentTime;
+      [523, 659, 784, 1047].forEach(function (fr, i) { osc("sawtooth", fr, t + i * 0.14, 0.28, 0.14, sfx, { filter: 2500 }); });
+      [523, 659, 784, 1047].forEach(function (fr) { osc("triangle", fr, t + 0.62, 1.4, 0.12, sfx); });
+    }
+
+    /* Narracion: voz en espanol neutro (prefiere voces de Mexico / EE. UU. / Latinoamerica y las "naturales") */
+    function score(v) {
+      var l = v.lang.replace("_", "-").toLowerCase(), n = v.name.toLowerCase(), s = 0;
+      if (/natural|neural|online/.test(n)) s += 50;
+      if (l === "es-mx") s += 30; else if (l === "es-419") s += 29; else if (l === "es-us") s += 28; else if (/^es-(co|ar|cl|pe|ve|ec|uy|bo)/.test(l)) s += 20; else if (l === "es-es") s += 5; else s += 10;
+      if (/google/.test(n)) s += 8;
+      return s;
+    }
+    function pickVoice() {
+      if (!window.speechSynthesis) return null;
+      var es = speechSynthesis.getVoices().filter(function (v) { return /^es/i.test(v.lang); });
+      if (!es.length) return null;
+      es.sort(function (a, b) { return score(b) - score(a); }); return es[0];
+    }
+    if (window.speechSynthesis) { voice = pickVoice(); speechSynthesis.onvoiceschanged = function () { voice = pickVoice(); }; }
+    function clean(t) { return t.replace(/\b([A-ZÁÉÍÓÚ])\./g, "$1").replace(/\s+/g, " "); }
+    function stopSay() {
+      if (cur) { cur.dead = true; clearTimeout(cur.to); cur = null; }
+      if (window.speechSynthesis) { try { speechSynthesis.cancel(); } catch (e) {} }
+      duck(false);
+    }
+    function say(text, done) {
+      stopSay();
+      var me = { dead: false, to: null }; cur = me;
+      function fin() { if (me.dead) return; me.dead = true; clearTimeout(me.to); if (cur === me) cur = null; duck(false); if (done) done(); }
+      if (!window.speechSynthesis || muted || vol === 0) { me.to = setTimeout(fin, Math.min(5000, 1200 + text.length * 40)); return; }
+      duck(true);
+      var u = new SpeechSynthesisUtterance(clean(text));
+      if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = "es-MX";
+      u.rate = 0.98; u.pitch = 1; u.volume = Math.min(1, vol * 1.3);
+      u.onend = fin; u.onerror = fin;
+      me.to = setTimeout(fin, 15000);
+      speechSynthesis.speak(u);
+    }
+    return {
+      unlock: init, musicStart: musicStart, musicStop: musicStop, say: say, stopSay: stopSay, tick: tick, pop: pop, sting: sting, fanfare: fanfare,
+      setVol: function (v) { vol = v; if (master) master.gain.value = muted ? 0 : vol; },
+      setMuted: function (m) { muted = m; if (master) master.gain.value = muted ? 0 : vol; if (m && cur && window.speechSynthesis) { try { speechSynthesis.cancel(); } catch (e) {} } },
+      isMuted: function () { return muted; },
+      voiceName: function () { return voice ? voice.name + " (" + voice.lang + ")" : (window.speechSynthesis ? "voz predeterminada del navegador" : "este navegador no tiene voz"); }
+    };
+  })();
+
   /* ====================== PANTALLA GRANDE (anfitrión) ====================== */
   function runTV() {
     var players = {}, S = { phase: "lobby", round: 0, total: 10 }, deadline = 0, votes = {}, scores = {}, names = {}, qs = [], tReveal = null, tNext = null, lastKey = "";
@@ -220,7 +353,7 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
 
     function payload() {
       var o = JSON.parse(JSON.stringify(S));
-      o.left = S.phase === "question" ? Math.max(0, deadline - Date.now()) : 0;
+      o.left = S.phase === "question" ? (S.open ? Math.max(0, deadline - Date.now()) : QTIME * 1000) : 0;
       o.voted = Object.keys(votes).length;
       return o;
     }
@@ -233,20 +366,30 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
       if (round > S.total) { finalRound(); return; }
       var opts = Object.keys(players).map(function (s) { return { slug: s, name: players[s] }; });
       if (opts.length < 2) { toLobby("Se necesitan al menos 2 jugadores conectados."); return; }
-      votes = {}; deadline = Date.now() + QTIME * 1000;
-      setState({ phase: "question", round: round, total: S.total, q: qs[round - 1], options: opts, scores: scores, qtime: QTIME });
-      tReveal = setTimeout(reveal, QTIME * 1000 + 200);
+      votes = {}; deadline = 0;
+      setState({ phase: "question", round: round, total: S.total, q: qs[round - 1], options: opts, scores: scores, qtime: QTIME, open: false });
+      /* se narra la pregunta y recien cuando termina empieza a correr el tiempo para votar */
+      Snd.say("Pregunta número " + round + ". " + qs[round - 1], function () { if (S.phase === "question" && S.round === round) openVoting(); });
     }
+    function openVoting() {
+      if (S.phase !== "question" || S.open) return;
+      S.open = true; deadline = Date.now() + QTIME * 1000; send(); draw();
+      clearTimeout(tReveal); tReveal = setTimeout(reveal, QTIME * 1000 + 200);
+    }
+    function nameList(a) { return a.length < 2 ? (a[0] || "") : a.slice(0, -1).join(", ") + " y " + a[a.length - 1]; }
     function reveal() {
       if (S.phase !== "question") return;
-      clearTimeout(tReveal);
+      clearTimeout(tReveal); Snd.stopSay();
       var counts = {}, voters = {}, max = 0;
       S.options.forEach(function (o) { counts[o.slug] = 0; voters[o.slug] = []; });
       Object.keys(votes).forEach(function (v) { var c = votes[v]; if (counts[c] == null) return; counts[c]++; voters[c].push(names[v] || v); if (counts[c] > max) max = counts[c]; });
       var winners = max > 0 ? S.options.filter(function (o) { return counts[o.slug] === max; }).map(function (o) { return o.slug; }) : [];
       var gained = {};
       Object.keys(votes).forEach(function (v) { if (winners.indexOf(votes[v]) > -1) { gained[v] = 100; scores[v] = (scores[v] || 0) + 100; } });
+      var wn = S.options.filter(function (o) { return winners.indexOf(o.slug) > -1; }).map(function (o) { return o.name; });
       setState({ phase: "reveal", round: S.round, total: S.total, q: S.q, options: S.options, counts: counts, voters: voters, winners: winners, gained: gained, scores: scores, votedBy: JSON.parse(JSON.stringify(votes)) });
+      Snd.sting();
+      Snd.say(!wn.length ? "Nadie votó en esta pregunta." : wn.length === 1 ? "El más votado es " + wn[0] + ", con " + max + (max === 1 ? " voto." : " votos.") : "Hay un empate entre " + nameList(wn) + ", con " + max + (max === 1 ? " voto cada uno." : " votos cada uno."));
       tNext = setTimeout(nextQuestion, 11000);
     }
     function finalRound() {
@@ -254,6 +397,11 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
       var rank = Object.keys(scores).map(function (s) { return { slug: s, name: names[s] || s, score: scores[s] }; }).sort(function (a, b) { return b.score - a.score; });
       Object.keys(players).forEach(function (s) { if (scores[s] == null) rank.push({ slug: s, name: players[s], score: 0 }); });
       setState({ phase: "final", round: S.total, total: S.total, rank: rank, scores: scores });
+      Snd.musicStop(); Snd.fanfare();
+      if (rank.length) {
+        var top = rank.filter(function (r) { return r.score === rank[0].score; }).map(function (r) { return r.name; });
+        setTimeout(function () { if (S.phase === "final") Snd.say(top.length === 1 ? "¡Fin del juego! El ganador es " + top[0] + ", con " + rank[0].score + " puntos. ¡Felicitaciones!" : "¡Fin del juego! Hay un empate en el primer lugar entre " + nameList(top) + ", con " + rank[0].score + " puntos cada uno. ¡Felicitaciones!"); }, 1700);
+      }
     }
     function start(n) {
       scores = {}; Object.keys(players).forEach(function (s) { scores[s] = 0; });
@@ -262,12 +410,13 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
       S = { phase: "lobby", round: 0, total: total };
       nextQuestion();
     }
-    function toLobby(msg) { clearTimeout(tNext); clearTimeout(tReveal); votes = {}; setState({ phase: "lobby", round: 0, total: S.total || 10, notice: msg || "" }); }
+    function toLobby(msg) { clearTimeout(tNext); clearTimeout(tReveal); Snd.stopSay(); Snd.musicStop(); votes = {}; setState({ phase: "lobby", round: 0, total: S.total || 10, notice: msg || "" }); }
 
     function onVote(m) {
-      if (!m || S.phase !== "question" || m.round !== S.round) return;
+      if (!m || S.phase !== "question" || !S.open || m.round !== S.round) return;
       if (!S.options.some(function (o) { return o.slug === m.choice; })) return;
       if (m.name) names[m.slug] = m.name;
+      if (votes[m.slug] == null) Snd.pop();
       votes[m.slug] = m.choice; send(); draw();
       if (Object.keys(votes).length >= Object.keys(players).length) reveal();
     }
@@ -297,14 +446,19 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
           '<div class="card"><h1>Sala abierta</h1><p class="dim">Entren desde el celular a:</p><div class="url">' + esc(url) + '</div></div>' +
           '<div class="card"><h2>Conectados (' + n + ')</h2><p></p>' + chips() + '</div>' +
           (S.notice ? '<div class="card" style="border-color:var(--bad)">' + esc(S.notice) + '</div>' : '') +
-          '<div class="card tvbar"><label class="dim" for="cnt">Preguntas</label><select id="cnt"><option value="5">5</option><option value="8">8</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option><option value="30">30</option><option value="0">Todas (' + QUESTIONS.length + ')</option></select><button class="btn primary" id="go"' + (n < 2 ? " disabled" : "") + '>Empezar el juego</button><span class="dim">' + (n < 2 ? "Faltan jugadores (mínimo 2)." : "Todo listo.") + '</span></div>';
-        var go = document.getElementById("go"); if (go) go.onclick = function () { start(parseInt(document.getElementById("cnt").value, 10)); };
+          '<div class="card tvbar"><label class="dim" for="cnt">Preguntas</label><select id="cnt"><option value="5">5</option><option value="8">8</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option><option value="30">30</option><option value="0">Todas (' + QUESTIONS.length + ')</option></select><button class="btn primary" id="go"' + (n < 2 ? " disabled" : "") + '>Empezar el juego</button><span class="dim">' + (n < 2 ? "Faltan jugadores (mínimo 2)." : "Todo listo.") + '</span></div>' +
+          '<div class="card tvbar"><button class="btn" id="tst">🔊 Probar voz y música</button><span class="dim">Voz: <span id="vn">' + esc(Snd.voiceName()) + '</span>. El sonido sale de este dispositivo: revisa el volumen del computador o del TV.</span></div>';
+        var go = document.getElementById("go"); if (go) go.onclick = function () { Snd.unlock(); Snd.musicStart(); start(parseInt(document.getElementById("cnt").value, 10)); };
+        document.getElementById("tst").onclick = function () {
+          Snd.unlock(); Snd.musicStart(); Snd.sting();
+          Snd.say("Hola. Esta es la voz del juego. Si se escucha bien, ya pueden empezar.", function () { setTimeout(function () { if (S.phase === "lobby") Snd.musicStop(); }, 2500); });
+        };
         return;
       }
       lastKey = "";
       if (S.phase === "question") {
-        $app.innerHTML = header + '<div class="meta"><span>Pregunta ' + S.round + ' de ' + S.total + '</span><span id="vc">Han votado ' + Object.keys(votes).length + ' de ' + n + '</span></div><div class="bar"><i id="tb"></i></div><div class="q grow">' + esc(S.q) + '</div><div class="chips">' + S.options.map(function (o) { return '<span class="chip">' + esc(o.name) + '</span>'; }).join("") + '</div><div class="tvbar"><button class="btn" id="skip">Mostrar resultados ya</button></div>';
-        document.getElementById("skip").onclick = reveal;
+        $app.innerHTML = header + '<div class="meta"><span>Pregunta ' + S.round + ' de ' + S.total + '</span><span id="vc">Han votado ' + Object.keys(votes).length + ' de ' + n + '</span></div><div class="bar"><i id="tb"></i></div><div class="q grow">' + esc(S.q) + '</div>' + (S.open ? '' : '<p class="dim">Escuchen la pregunta…</p>') + '<div class="chips">' + S.options.map(function (o) { return '<span class="chip">' + esc(o.name) + '</span>'; }).join("") + '</div><div class="tvbar"><button class="btn" id="skip">' + (S.open ? "Mostrar resultados ya" : "Saltar narración") + '</button></div>';
+        document.getElementById("skip").onclick = function () { if (S.open) reveal(); else { Snd.stopSay(); openVoting(); } };
         tickBar(); return;
       }
       if (S.phase === "reveal") {
@@ -325,11 +479,29 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
     }
     function tickBar() {
       var b = document.getElementById("tb"); if (!b || S.phase !== "question") return;
+      if (!S.open) { b.style.width = "100%"; return; }
       var frac = Math.max(0, (deadline - Date.now()) / (QTIME * 1000)); b.style.width = (frac * 100) + "%";
       var vc = document.getElementById("vc"); if (vc) vc.textContent = "Han votado " + Object.keys(votes).length + " de " + Object.keys(players).length;
       if (frac > 0) requestAnimationFrame(tickBar);
     }
     document.addEventListener("keydown", function (e) { if ((e.code === "Space" || e.code === "Enter") && S.phase === "reveal") { e.preventDefault(); nextQuestion(); } });
+
+    /* tictac en los ultimos 5 segundos y nombre de la voz en la sala */
+    var lastTick = -1;
+    setInterval(function () {
+      if (S.phase === "question" && S.open) {
+        var sec = Math.ceil((deadline - Date.now()) / 1000);
+        if (sec <= 5 && sec > 0 && sec !== lastTick) { lastTick = sec; Snd.tick(sec); }
+      } else lastTick = -1;
+      var vn = document.getElementById("vn"); if (vn) vn.textContent = Snd.voiceName();
+    }, 200);
+
+    /* volumen y silencio (esquina superior derecha de la pantalla grande) */
+    var ctl = document.createElement("div"); ctl.id = "snd";
+    ctl.innerHTML = '<button class="btn" id="mute" aria-label="Silenciar">🔊</button><input type="range" id="vol" min="0" max="100" value="70" aria-label="Volumen">';
+    document.body.appendChild(ctl);
+    document.getElementById("mute").onclick = function () { var m = !Snd.isMuted(); Snd.setMuted(m); this.textContent = m ? "🔇" : "🔊"; };
+    document.getElementById("vol").oninput = function () { Snd.setVol(this.value / 100); };
     draw();
   }
 
@@ -362,13 +534,13 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
     document.addEventListener("visibilitychange", function () { if (!document.hidden && ch && connected) ch.send({ type: "broadcast", event: "hello", payload: { slug: me } }); });
 
     function onState(p) {
-      var key = p.phase + "|" + p.round;
-      var changed = key !== (S.phase + "|" + S.round);
+      var key = p.phase + "|" + p.round + "|" + (p.open ? 1 : 0);
+      var changed = key !== (S.phase + "|" + S.round + "|" + (S.open ? 1 : 0));
       S = p; deadline = Date.now() + (p.left || 0);
       if (changed || keyDrawn === "") draw(); else live();
     }
     function vote(choice) {
-      if (S.phase !== "question" || Date.now() > deadline) return;
+      if (S.phase !== "question" || !S.open || Date.now() > deadline) return;
       myVote[S.round] = choice; ch.send({ type: "broadcast", event: "vote", payload: { slug: me, name: myName, round: S.round, choice: choice } });
       [].forEach.call(document.querySelectorAll(".opt"), function (b) { b.classList.toggle("sel", b.getAttribute("data-s") === choice); });
       var m = document.getElementById("mv"); if (m) m.textContent = "Tu voto quedó registrado. Puedes cambiarlo hasta que termine el tiempo.";
@@ -376,7 +548,7 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
     function live() {
       var b = document.getElementById("tb");
       if (b && S.phase === "question") { var total = Math.max(1, S.qtime || QTIME); b.style.width = Math.max(0, Math.min(100, (deadline - Date.now()) / 1000 / total * 100)) + "%"; }
-      var t = document.getElementById("tt"); if (t && S.phase === "question") t.textContent = Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) + " s";
+      var t = document.getElementById("tt"); if (t && S.phase === "question") t.textContent = S.open ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) + " s" : "Escucha…";
       var v = document.getElementById("vd"); if (v) v.textContent = (S.voted || 0) + " votos";
     }
     setInterval(function () { if (S.phase === "question") live(); }, 250);
@@ -393,7 +565,7 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
       }
       if (S.phase === "question") {
         var mine = myVote[S.round];
-        $app.innerHTML = hi + '<div class="meta"><span>Pregunta ' + S.round + ' de ' + S.total + '</span><span id="tt"></span></div><div class="bar"><i id="tb"></i></div><div class="q">' + esc(S.q) + '</div><div class="names">' + S.options.map(function (o) { return '<button class="opt' + (mine === o.slug ? " sel" : "") + '" data-s="' + esc(o.slug) + '">' + esc(o.name) + '</button>'; }).join("") + '</div><p class="dim center" id="mv">' + (mine ? "Tu voto quedó registrado. Puedes cambiarlo hasta que termine el tiempo." : "Vota por una persona.") + '</p><p class="dim center"><span id="vd"></span></p>';
+        $app.innerHTML = hi + '<div class="meta"><span>Pregunta ' + S.round + ' de ' + S.total + '</span><span id="tt"></span></div><div class="bar"><i id="tb"></i></div><div class="q">' + esc(S.q) + '</div><div class="names">' + S.options.map(function (o) { return '<button class="opt' + (mine === o.slug ? " sel" : "") + '" data-s="' + esc(o.slug) + '"' + (S.open ? "" : " disabled") + '>' + esc(o.name) + '</button>'; }).join("") + '</div><p class="dim center" id="mv">' + (!S.open ? "Escucha la pregunta en la pantalla grande. Podrás votar en un momento." : mine ? "Tu voto quedó registrado. Puedes cambiarlo hasta que termine el tiempo." : "Vota por una persona.") + '</p><p class="dim center"><span id="vd"></span></p>';
         [].forEach.call(document.querySelectorAll(".opt"), function (b) { b.onclick = function () { vote(b.getAttribute("data-s")); }; });
         live(); return;
       }
