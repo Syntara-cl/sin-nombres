@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Los Sin Nombres</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Alegreya+Sans:wght@400;500;700;800&family=Permanent+Marker&display=swap">
+<style>
+/* Layout: una sola columna larga, pasos en orden (nombre, comida, tarea, voto, tablero). El motivo es la etiqueta "Hola, soy ___" porque el grupo no tiene nombre. */
+:root {
+  --bg: #ece7f4;
+  --surface: #f8f5fc;
+  --surface2: #e2daef;
+  --line: #cbbfdf;
+  --ink: #20162f;
+  --dim: #5d4f78;
+  --accent: #e8710c;
+  --accent-ink: #1d1000;
+  --accent-text: #a94700;
+  --good: #1f7a43;
+  --ghost: #ffffff;
+  --glow: rgba(232, 113, 12, 0.13);
+  --paper: #f7f1e1;
+  --paper-ink: #241a33;
+  --f-display: "Pirata One", "Georgia", serif;
+  --f-body: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+  --f-hand: "Permanent Marker", "Segoe Print", cursive;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #150f1f; --surface: #201830; --surface2: #2a2040; --line: #3a2e55;
+    --ink: #f0e7d4; --dim: #b5a9c9; --accent: #ff8a1f; --accent-text: #ffa24d;
+    --good: #9fe3b4; --ghost: #e9e4f5; --glow: rgba(255, 138, 31, 0.16);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #150f1f; --surface: #201830; --surface2: #2a2040; --line: #3a2e55;
+  --ink: #f0e7d4; --dim: #b5a9c9; --accent: #ff8a1f; --accent-text: #ffa24d;
+  --good: #9fe3b4; --ghost: #e9e4f5; --glow: rgba(255, 138, 31, 0.16);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  background-image: radial-gradient(60rem 30rem at 85% -8%, var(--glow), transparent 70%);
+  background-repeat: no-repeat;
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 18px;
+  line-height: 1.45;
+  padding-inline: 0;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); }
+.wrap {
+  max-width: 1000px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* Barra de identidad */
+.mebar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); }
+.mebar .wrap { display: flex; align-items: center; gap: 12px; padding-block: 8px; flex-wrap: wrap; }
+.mebar[hidden] { display: none; }
+.mebar b { font-family: var(--f-hand); font-weight: 400; font-size: 1.15rem; color: var(--accent-text); }
+.mebar a { color: var(--dim); font-size: 0.9rem; margin-left: auto; }
+.mebar span { color: var(--dim); font-size: 0.9rem; }
+
+/* Hero */
+.hero { display: grid; grid-template-columns: 1fr auto; gap: 24px 40px; align-items: center; padding-block: 44px 28px; }
+.eyebrow { font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; font-size: 0.8rem; color: var(--accent-text); }
+h1 { font-family: var(--f-display); font-weight: 400; font-size: clamp(3.2rem, 11vw, 6.6rem); line-height: 0.92; margin: 8px 0 14px; text-wrap: balance; }
+h1 em { font-style: normal; color: var(--accent-text); }
+.when { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 1.05rem; }
+.when strong { font-weight: 800; }
+.count { display: inline-block; margin-top: 14px; padding: 4px 12px; border: 1.5px dashed var(--accent-text); border-radius: 999px; color: var(--accent-text); font-weight: 700; }
+.hero-art { position: relative; width: 250px; height: 250px; }
+.pumpkin { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; display: block; }
+.pumpkin:active { cursor: grabbing; }
+.hero-art.has3d .ghost { display: none; }
+.tags { perspective: 900px; }
+.tag .nt { transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 0.12s ease-out, box-shadow 0.12s; will-change: transform; }
+.tag:hover .nt { box-shadow: 0 3px 0 rgba(0,0,0,0.18), 0 16px 26px rgba(0,0,0,0.28); }
+@keyframes stampIn { 0% { opacity: 0; transform: rotate(-9deg) scale(2.1); } 62% { opacity: 1; transform: rotate(-2.5deg) scale(0.94); } 100% { opacity: 1; transform: rotate(-2.5deg) scale(1); } }
+.stamp { animation: stampIn 0.55s cubic-bezier(0.2, 0.8, 0.3, 1) 0.5s backwards; }
+@media (prefers-reduced-motion: reduce) { .stamp { animation: none; } .tag .nt { transform: none !important; } }
+.ghost { position: absolute; left: 8px; top: 0; width: 150px; animation: float 5s ease-in-out infinite; filter: drop-shadow(0 10px 18px rgba(0,0,0,0.25)); }
+.bigtag { position: absolute; right: -6px; bottom: -30px; width: 150px; transform: rotate(5deg); }
+@keyframes float { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-10px) rotate(2deg); } }
+@media (prefers-reduced-motion: reduce) { .ghost { animation: none; } * { scroll-behavior: auto !important; } }
+
+/* Ambiente y firma */
+.hero { position: relative; }
+.hero > div:not(.bats) { position: relative; z-index: 1; }
+.web { position: absolute; left: -6px; top: 0; width: 170px; height: 170px; z-index: 0; color: var(--dim); opacity: 0.26; pointer-events: none; }
+.bats { position: absolute; right: 4%; top: 14px; width: 210px; height: 80px; z-index: 0; color: var(--ink); opacity: 0.55; pointer-events: none; }
+.bats svg { position: absolute; fill: currentColor; animation: flap 3.2s ease-in-out infinite; }
+.bats svg:nth-child(1) { left: 0; top: 26px; width: 58px; }
+.bats svg:nth-child(2) { left: 84px; top: 0; width: 40px; animation-delay: -1s; }
+.bats svg:nth-child(3) { left: 150px; top: 34px; width: 48px; animation-delay: -2s; }
+@keyframes flap { 0%,100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(-5px) scaleY(0.82); } }
+@media (prefers-reduced-motion: reduce) { .bats svg { animation: none; } }
+.stamp { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; margin-top: 18px; padding: 8px 18px 9px; border: 3px double var(--accent-text); border-radius: 6px; color: var(--accent-text); transform: rotate(-2.5deg); text-transform: uppercase; font-weight: 800; font-size: 0.66rem; letter-spacing: 0.18em; }
+.stamp b { font-family: var(--f-hand); font-weight: 400; font-size: 1.7rem; letter-spacing: 0; text-transform: none; line-height: 1.1; }
+.sig { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-bottom: 26px; }
+.sig-name { font-family: var(--f-hand); font-size: 2rem; color: var(--accent-text); transform: rotate(-3deg); line-height: 1.1; }
+.sig-line { width: 200px; border-top: 1.5px solid var(--line); padding-top: 4px; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
+@media (max-width: 640px) { .web { width: 120px; height: 120px; } .bats { right: 2%; top: 4px; width: 150px; height: 60px; opacity: 0.45; } .bats svg:nth-child(1) { width: 40px; top: 18px; } .bats svg:nth-child(2) { left: 56px; width: 30px; } .bats svg:nth-child(3) { left: 104px; width: 36px; top: 24px; } }
+
+.blurb { max-width: 46ch; margin: 14px 0 0; font-size: 1.08rem; line-height: 1.5; padding-left: 14px; border-left: 3px solid var(--accent); }
+
+/* Acertijo */
+.riddle { background: var(--paper); color: var(--paper-ink); border-radius: 12px; padding: 24px 22px; box-shadow: 0 2px 0 rgba(0,0,0,0.18), 0 14px 30px rgba(0,0,0,0.22); position: relative; max-width: 680px; }
+.riddle::before { content: ""; position: absolute; inset: 7px; border: 1.5px dashed #b9a97f; border-radius: 8px; pointer-events: none; }
+.riddle > * { position: relative; }
+.riddle .verse { margin: 0 0 4px; padding-left: 14px; border-left: 3px solid var(--accent); font-size: 1.12rem; line-height: 1.5; }
+.riddle .verse p { margin: 0 0 8px; }
+.riddle .ask { font-family: var(--f-display); font-size: 1.9rem; line-height: 1; margin: 14px 0 12px; }
+.prize { display: inline-block; background: var(--accent); color: var(--accent-ink); font-weight: 800; padding: 5px 14px; border-radius: 999px; font-size: 0.9rem; margin-bottom: 14px; }
+.ansrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.riddle input[type="text"] { flex: 1 1 200px; background: rgba(255,255,255,0.7); color: var(--paper-ink); border-color: #b9a97f; }
+.riddle .btn { background: var(--paper-ink); color: var(--paper); border-color: var(--paper-ink); }
+.riddle .btn.ghostbtn { background: transparent; color: var(--paper-ink); border-color: #b9a97f; }
+.riddle .btn:hover { border-color: var(--accent); }
+.ansmsg { min-height: 1.4em; margin: 8px 0 0; font-weight: 700; color: #8a3b00; }
+.hint { margin: 10px 0 0; font-style: italic; }
+.hint[hidden], .win[hidden], #riddleForm[hidden] { display: none; }
+.win { background: var(--accent); color: var(--accent-ink); border-radius: 8px; padding: 12px 14px; font-weight: 700; margin-top: 6px; }
+
+/* Etiqueta */
+.nt { background: var(--paper); color: var(--paper-ink); border-radius: 7px; overflow: hidden; box-shadow: 0 2px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
+.nt-top { background: var(--accent); color: var(--accent-ink); text-align: center; font-weight: 800; letter-spacing: 0.14em; font-size: 0.62rem; padding: 4px 4px 3px; text-transform: uppercase; }
+.nt-name { font-family: var(--f-hand); font-size: 1.35rem; line-height: 1.1; padding: 12px 8px 14px; text-align: center; min-height: 3.3rem; display: flex; align-items: center; justify-content: center; overflow-wrap: anywhere; }
+.nt-name.blank { color: transparent; background: linear-gradient(transparent calc(100% - 16px), var(--paper-ink) calc(100% - 16px), var(--paper-ink) calc(100% - 15px), transparent calc(100% - 15px)); background-size: 78% 100%; background-repeat: no-repeat; background-position: center; }
+
+/* Resumen */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+.stat { background: var(--surface); padding: 12px 14px; min-width: 0; }
+.stat b { display: block; font-family: var(--f-body); font-weight: 800; font-size: 2rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 0.82rem; color: var(--dim); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* Pasos */
+.step { padding-block: 36px 8px; scroll-margin-top: 60px; }
+.step-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+.step-no { font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; font-size: 0.78rem; color: var(--accent-text); }
+h2 { font-family: var(--f-display); font-weight: 400; font-size: clamp(1.9rem, 5vw, 2.6rem); line-height: 1; margin: 0; text-wrap: balance; }
+.lead { color: var(--dim); max-width: 62ch; margin: 4px 0 18px; }
+h3 { font-size: 0.82rem; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 800; color: var(--dim); margin: 22px 0 10px; }
+
+.banner { background: var(--surface2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-top: 10px; font-size: 0.95rem; }
+.banner[hidden] { display: none; }
+
+/* Selector de nombre */
+.tags { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 16px 14px; padding: 6px 4px; }
+.tag { padding: 0; border: 0; background: none; text-align: left; position: relative; transition: transform 0.15s; }
+.tag:nth-child(odd) { transform: rotate(-1.3deg); }
+.tag:nth-child(even) { transform: rotate(1.1deg); }
+.tag:hover { transform: rotate(0) translateY(-3px); }
+.tag[aria-pressed="true"] { transform: rotate(0) translateY(-3px); }
+.tag[aria-pressed="true"] .nt { outline: 3px solid var(--accent); outline-offset: 3px; }
+.tag .done { position: absolute; top: 20px; right: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--good); border: 2px solid var(--paper); }
+.addname { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; align-items: center; }
+.addname label { color: var(--dim); font-size: 0.95rem; }
+
+input[type="text"] { font: inherit; background: var(--surface); color: var(--ink); border: 1.5px solid var(--line); border-radius: 8px; padding: 8px 12px; min-width: 0; }
+.btn { background: var(--surface2); border: 1.5px solid var(--line); border-radius: 8px; padding: 8px 14px; font-weight: 700; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+.attend { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 22px; }
+.field { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.field label, .field .lab { display: block; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
+.field input[type="text"] { width: 100%; }
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface2); font-size: 1.25rem; line-height: 1; padding: 0; }
+.stepper button:hover { border-color: var(--accent); }
+.stepper output { font-family: var(--f-body); font-weight: 800; font-size: 1.7rem; min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
+.locked { opacity: 0.55; pointer-events: none; }
+
+/* Menu y tareas */
+.items { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 10px; }
+.item { text-align: left; background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; position: relative; }
+.item:hover:not(:disabled) { border-color: var(--accent); }
+.item[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.item[aria-pressed="true"] .who, .item[aria-pressed="true"] .note, .item[aria-pressed="true"] .cupo { color: var(--accent-ink); }
+.item:disabled { opacity: 0.5; cursor: not-allowed; }
+.item .name { font-weight: 800; font-size: 1.05rem; padding-right: 22px; }
+.item .note { font-size: 0.88rem; color: var(--dim); }
+.item .cat { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+.item[aria-pressed="true"] .cat { color: var(--accent-ink); }
+.item .who { font-size: 0.9rem; color: var(--accent-text); font-weight: 700; overflow-wrap: anywhere; }
+.item .cupo { display: flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--dim); font-weight: 700; margin-top: auto; }
+.pip { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid currentColor; }
+.pip.on { background: currentColor; }
+.item .mark { position: absolute; top: 10px; right: 12px; font-weight: 800; }
+.extra { margin-top: 14px; max-width: 520px; }
+
+/* Propuestas */
+.props { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+.prop { background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.prop.mine { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.prop h4 { font-family: var(--f-display); font-weight: 400; font-size: 1.7rem; line-height: 1; margin: 0; }
+.prop .tagline { color: var(--dim); margin: 0; }
+.prop ul { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; }
+.cuota { background: var(--surface2); border-radius: 8px; padding: 10px 12px; }
+.cuota b { font-family: var(--f-body); font-weight: 800; font-size: 1.7rem; display: block; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.cuota span { font-size: 0.85rem; color: var(--dim); }
+.bar { height: 8px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.votes { font-size: 0.9rem; color: var(--dim); overflow-wrap: anywhere; }
+.votes b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Tablero */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 0.95rem; }
+th, td { text-align: left; padding: 10px 12px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-size: 0.76rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); background: var(--surface2); }
+tr:last-child td { border-bottom: 0; }
+td.n { font-family: var(--f-hand); color: var(--accent-text); white-space: nowrap; }
+.pending { margin-top: 12px; color: var(--dim); }
+.pending b { color: var(--ink); }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+footer { padding-block: 40px 56px; color: var(--dim); text-align: center; font-size: 0.95rem; }
+footer .f { font-family: var(--f-display); font-size: 1.5rem; color: var(--ink); display: block; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 700; z-index: 40; max-width: calc(100% - 32px); }
+.toast[hidden] { display: none; }
+
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  .hero { grid-template-columns: 1fr; padding-block: 28px 18px; }
+  .hero-art { width: 236px; height: 220px; order: -1; margin-bottom: 26px; }
+  .ghost { width: 110px; }
+  .bigtag { width: 124px; }
+  .stats { grid-template-columns: repeat(3, 1fr); }
+  .stat { padding: 10px 8px; }
+  .stat b { font-size: 1.6rem; }
+  .stat span { font-size: 0.66rem; letter-spacing: 0.03em; overflow-wrap: anywhere; display: block; }
+  .bigtag { width: 140px; }
+  .nt-top { font-size: 0.52rem; letter-spacing: 0.06em; white-space: nowrap; }
+  .items { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .item { padding: 10px 11px; gap: 3px; }
+  .item .name { font-size: 0.98rem; line-height: 1.2; padding-right: 16px; }
+  .item .note { font-size: 0.8rem; line-height: 1.3; }
+  .item .cat { font-size: 0.62rem; letter-spacing: 0.08em; }
+  .item .who { font-size: 0.85rem; }
+  .item .mark { right: 9px; top: 8px; }
+  .tags { gap: 14px 12px; }
+  .step { padding-block: 28px 6px; }
+  h3 { margin-top: 16px; }
+  .scroll { border: 0; background: none; overflow: visible; }
+  table { min-width: 0; display: block; }
+  thead { display: none; }
+  tbody { display: grid; gap: 10px; }
+  tbody tr { display: block; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  tbody td { display: block; padding: 3px 0; border: 0; }
+  td[data-l]::before { content: attr(data-l); display: block; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+  td.n { font-size: 1.2rem; padding-bottom: 4px; }
+}
+</style>
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="mebar" id="mebar" hidden>
+  <div class="wrap">
+    <span>Anotando como</span> <b id="mebarName"></b>
+    <a href="#paso1" id="changeMe">Cambiar</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <svg class="web" viewBox="0 0 170 170" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M0 0L170 0M0 0L150 70M0 0L110 110M0 0L70 150M0 0L0 170"/><path d="M40 0Q34 34 0 40M80 0Q66 66 0 80M120 0Q98 98 0 120M160 0Q130 130 0 160"/></svg>
+    <div class="bats" aria-hidden="true">
+      <svg viewBox="0 0 40 20"><path d="M20 18C18 12 14 6 2 8C7 10 8 14 12 15C14 14 17 15 20 18C23 15 26 14 28 15C32 14 33 10 38 8C26 6 22 12 20 18Z"/></svg>
+      <svg viewBox="0 0 40 20"><path d="M20 18C18 12 14 6 2 8C7 10 8 14 12 15C14 14 17 15 20 18C23 15 26 14 28 15C32 14 33 10 38 8C26 6 22 12 20 18Z"/></svg>
+      <svg viewBox="0 0 40 20"><path d="M20 18C18 12 14 6 2 8C7 10 8 14 12 15C14 14 17 15 20 18C23 15 26 14 28 15C32 14 33 10 38 8C26 6 22 12 20 18Z"/></svg>
+    </div>
+    <div>
+      <div class="eyebrow">Junta familiar de Halloween</div>
+      <h1>Los Sin <em>Nombres</em></h1>
+      <div class="when">
+        <span><strong>Sábado 31 de octubre</strong></span>
+        <span>Casa de la tía Jana</span>
+        <span>Con disfraz</span>
+      </div>
+      <p class="blurb">Hacía rato que no nos juntábamos todos. Esta página solo ordena quién lleva qué, para que el sábado lo único importante sea estar juntos, reírnos y pasarlo bien.</p>
+      <div class="count" id="countdown"></div>
+      <div><div class="stamp"><span>Convocatoria oficial</span><b>Fabián A.</b><span>Líder supremo</span></div></div>
+    </div>
+    <div class="hero-art" id="heroArt" aria-hidden="true">
+      <canvas class="pumpkin" id="pumpkin" width="250" height="250"></canvas>
+      <svg class="ghost" viewBox="0 0 120 150" fill="none">
+        <path d="M60 8C32 8 14 30 14 60v70c0 6 6 8 10 4l10-9 12 12c3 3 7 3 10 0l4-5 4 5c3 3 7 3 10 0l12-12 10 9c4 4 10 2 10-4V60C106 30 88 8 60 8z" fill="var(--ghost)"/>
+        <ellipse cx="44" cy="60" rx="7" ry="10" fill="#241a33"/>
+        <ellipse cx="76" cy="60" rx="7" ry="10" fill="#241a33"/>
+        <ellipse cx="60" cy="90" rx="8" ry="11" fill="#241a33"/>
+      </svg>
+      <div class="bigtag nt">
+        <div class="nt-top">Hola, mi nombre es</div>
+        <div class="nt-name" id="heroTag"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="stats" id="stats" aria-live="polite"></div>
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="step" id="paso1">
+    <div class="step-head"><span class="step-no">Paso 1</span><h2>Ponte tu etiqueta</h2></div>
+    <p class="lead">Somos los sin nombre hasta que elijas el tuyo. Toca tu etiqueta. Si no estás en la lista, agrégate abajo.</p>
+    <div class="tags" id="tags"></div>
+    <div class="addname">
+      <label for="newName">Mi nombre no está:</label>
+      <input type="text" id="newName" maxlength="24" placeholder="Escribe tu nombre" autocomplete="off">
+      <button class="btn" data-act="addname">Agregar</button>
+    </div>
+  </section>
+
+  <section class="step" id="paso2">
+    <div class="step-head"><span class="step-no">Paso 2</span><h2>¿Qué traes?</h2></div>
+    <p class="lead">Comida, adornos y desechables: elige lo que vas a llevar. Todo es desechable para no lavar nada después. Debajo de cada cosa ves quién ya la lleva, para que no se repita.</p>
+    <div id="menu"></div>
+    <div class="field extra">
+      <label for="extra">Otra cosa que quiero llevar</label>
+      <input type="text" id="extra" maxlength="80" placeholder="Algo que no está en el menú">
+    </div>
+  </section>
+
+  <section class="step" id="paso3">
+    <div class="step-head"><span class="step-no">Paso 3</span><h2>¿Qué haces tú?</h2></div>
+    <p class="lead">Cocinar, ornamentar, limpiar. Puedes tomar más de una tarea.</p>
+    <div class="items" id="tasks"></div>
+  </section>
+
+  <section class="step" id="paso5">
+    <div class="step-head"><span class="step-no">Paso 4</span><h2>El tablero</h2></div>
+    <p class="lead">Todo lo anotado hasta ahora. La tía Jana puede usarlo para ordenar la comida.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Quién</th><th>Trae</th><th>Hace</th></tr></thead>
+      <tbody id="board"></tbody>
+    </table></div>
+    <div class="pending" id="pending"></div>
+    <div class="actions"><button class="btn primary" data-act="copy">Copiar resumen para WhatsApp</button></div>
+  </section>
+
+  <section class="step" id="acertijo">
+    <div class="step-head"><span class="step-no">Para el final</span><h2>El acertijo</h2></div>
+    <p class="lead">Un solo ganador. Elige tu nombre en el paso 1 y responde. Quien acierte primero queda registrado para todos.</p>
+    <div class="riddle">
+      <span class="prize">Premio: un sour extra, el mejor sour del mundo</span>
+      <div class="verse">
+        <p>Nací el día en que naciste y nunca te dije mi nombre.</p>
+        <p>Tengo tu forma entera, pero ni un solo rasgo.</p>
+        <p>Al mediodía casi no existo; al caer la tarde me estiro más que un gigante.</p>
+        <p>Dicen que los vampiros no tienen reflejo; hay quien jura que a mí tampoco me tienen.</p>
+        <p>Sin luz me pierdo, y con luz por todos lados también.</p>
+      </div>
+      <div class="ask">¿Quién soy?</div>
+      <div class="win" id="riddleWin" hidden></div>
+      <div id="riddleForm">
+        <div class="ansrow">
+          <input type="text" id="ans" maxlength="40" placeholder="Tu respuesta" autocomplete="off" autocapitalize="none" aria-label="Tu respuesta">
+          <button class="btn" data-act="solve">Probar</button>
+          <button class="btn ghostbtn" id="hintBtn" data-act="hint">Pista</button>
+        </div>
+        <p class="ansmsg" id="ansMsg" aria-live="polite"></p>
+        <p class="hint" id="hintText" hidden>No pesa, no cabe en un bolsillo y siempre apunta al lado contrario del sol.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer><div class="sig"><span class="sig-name">Fabián A.</span><span class="sig-line">Líder supremo</span></div><span class="f">Nos vemos el 31</span>Los Sin Nombres · Halloween 2026</footer>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  /* CONFIGURACION: pega aqui los datos de tu proyecto de Supabase (ver LEEME.md) */
+  var SUPABASE_URL = "PEGA_AQUI_LA_URL_DE_TU_PROYECTO";
+  var SUPABASE_KEY = "PEGA_AQUI_LA_ANON_KEY";
+  var sb = null, inflight = 0, holdUntil = 0;
+  var SEED = ["Natalia", "Silvia", "Stefany", "Tía Jana", "Pauli", "Cata", "Marisol", "Marcelo", "Fabián A.", "Fabián B.", "Pablo", "Romina", "Andrés"];
+  var MENU = [
+    { cat: "Para picar", items: [
+      { id: "tabla-quesos", name: "Tabla de quesos", note: "Gouda, mantecoso, queso de cabra", cupos: 2 },
+      { id: "tabla-salame", name: "Tabla de salame y jamón", note: "Salame, jamón serrano, arrollado", cupos: 2 },
+      { id: "tabla-aceitunas", name: "Tabla de aceitunas y frutos secos", note: "Aceitunas, maní, almendras, pickles", cupos: 1 },
+      { id: "tabla-mixta", name: "Tabla mixta", note: "Sugerencia: quesos, fiambres, aceitunas, huevos de codorniz, tomatitos y frutos secos", cupos: 1 },
+      { id: "empanaditas", name: "Empanaditas", note: "De carne y napolitana", cupos: 3 },
+      { id: "brochetas", name: "Brochetas", cupos: 2 },
+      { id: "cebiche", name: "Cebiche", cupos: 1 },
+      { id: "pebre", name: "Pan y pebre", cupos: 2 },
+      { id: "snack", name: "Papas fritas y snacks", cupos: 2 } ] },
+    { cat: "Para la parrilla", items: [
+      { id: "chuletas", name: "Chuletas parrilleras", cupos: 2 },
+      { id: "prietas", name: "Prietas", cupos: 2 },
+      { id: "chorizos", name: "Choripanes", cupos: 2 },
+      { id: "carbon", name: "Carbón", cupos: 2 } ] },
+    { cat: "Sin alcohol", items: [
+      { id: "bebidas", name: "Bebidas y jugos de 2 litros", cupos: 3 } ] },
+    { cat: "Tragos", items: [
+      { id: "sour", name: "Sour", note: "(Debe llevar hielo, limón sutil, azúcar flor y 2 botellas de pisco transparente)", cupos: 1 } ] },
+    { cat: "Ornamentación", items: [
+      { id: "ornamentacion", name: "Ornamentación", note: "Sugerencia: guirnaldas, telarañas, calabazas, velas LED, luces y globos", cupos: 4 } ] },
+    { cat: "Desechables", items: [
+      { id: "des-bandejas", name: "Bandejas desechables", cupos: 2 },
+      { id: "des-platos", name: "Platos desechables", cupos: 2 },
+      { id: "des-servilletas", name: "Servilletas y papel absorbente", cupos: 2 },
+      { id: "des-manteles", name: "Manteles desechables", cupos: 1 },
+      { id: "des-bolsas", name: "Bolsas de basura", cupos: 1 } ] }
+  ];
+  var TASKS = [
+    { id: "t-parrilla", name: "Maestro de la parrilla", note: "Prende y cuida el fuego", cupos: 1 },
+    { id: "t-sour", name: "Preparar el sour", note: "Dicen que es el mejor de Chile", cupos: 1 },
+    { id: "t-orna", name: "Ornamentar la casa", note: "Armar y colgar los adornos que se compren", cupos: 3 },
+    { id: "t-mesas", name: "Armar mesas y sillas", note: "Antes de que llegue la gente", cupos: 3 },
+    { id: "t-musica", name: "Música y playlist", note: "Que no sea solo reguetón", cupos: 1 },
+    { id: "t-fotos", name: "Fotos del recuerdo", note: "La foto familiar de cierre", cupos: 1 },
+    { id: "t-limpieza", name: "Limpieza al final", note: "Todo es desechable: solo botar la basura", cupos: 4 }
+  ];
+  var FECHA = new Date(2026, 9, 31);
+
+  var db = null, canWrite = true, me = null, people = {}, ready = false;
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  var slug = function (n) { return n.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40); };
+  var money = function (n) { return "$" + Math.round(n).toLocaleString("es-CL"); };
+
+  try { me = localStorage.getItem("sn_me") || null; } catch (e) {}
+
+  var seedBySlug = {}; SEED.forEach(function (n) { seedBySlug[slug(n)] = n; });
+  function nameOf(s) { return (people[s] && people[s].name) || seedBySlug[s] || s; }
+  function allSlugs() {
+    var seen = {}, out = [];
+    SEED.map(slug).concat(Object.keys(people)).forEach(function (s) { if (!seen[s]) { seen[s] = 1; out.push(s); } });
+    return out;
+  }
+  function going() { return Object.keys(people).filter(function (s) { return people[s].going !== false; }); }
+  function who(listKey, id) {
+    return Object.keys(people).filter(function (s) { return people[s].going !== false && (people[s][listKey] || []).indexOf(id) > -1; });
+  }
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast.h); toast.h = setTimeout(function () { t.hidden = true; }, 2800);
+  }
+  function goStep1() {
+    var el = $("paso1");
+    el.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    toast("Primero elige tu nombre");
+  }
+
+  /* Escritura: un documento por persona, una escritura a la vez */
+  var queue = Promise.resolve();
+  function handleErr(e) {
+    if (e && e.code === "invalid_argument") { canWrite = false; renderBanner(); toast("Tu acceso es solo de lectura"); }
+    else toast("No se pudo guardar. Intenta de nuevo.");
+  }
+  function save(patch) {
+    if (!db || !me) return;
+    if (!canWrite) { toast("Tu acceso es solo de lectura"); return; }
+    var base = people[me] || { name: nameOf(me), bring: [], tasks: [], going: true };
+    var cur = Object.assign({}, base, patch);
+    people[me] = cur;
+    renderAll();
+    var id = me;
+    inflight++; holdUntil = Date.now() + 1500;
+    queue = queue.then(function () { return sb.from("halloween_signups").upsert({ slug: id, data: cur, updated_at: new Date().toISOString() }); }).then(function (r) { if (r && r.error) throw r.error; }).catch(handleErr).then(function () { inflight--; holdUntil = Date.now() + 800; });
+  }
+  var timers = {};
+  function saveLater(key, patch) {
+    if (!me) return;
+    people[me] = Object.assign({}, people[me] || { name: nameOf(me), bring: [], tasks: [], going: true }, patch);
+    clearTimeout(timers[key]); holdUntil = Date.now() + 1500;
+    var id = me;
+    timers[key] = setTimeout(function () { if (id === me) save({}); }, 600);
+  }
+
+  /* Render */
+  function renderBanner() {
+    var b = $("banner");
+    if (!ready) { b.hidden = true; return; }
+    if (!db) { b.hidden = false; b.textContent = "No se pudo conectar con la base de datos. Revisa la configuración del sitio."; }
+    else if (!canWrite) { b.hidden = false; b.textContent = "Tienes acceso solo de lectura. Pide al administrador que te dé permiso de colaborador para anotarte."; }
+    else b.hidden = true;
+  }
+  function renderStats() {
+    var g = going(), plates = 0, covered = 0;
+    g.forEach(function (s) { plates += (people[s].bring || []).length + (people[s].extra ? 1 : 0); });
+    TASKS.forEach(function (t) { if (who("tasks", t.id).length) covered++; });
+    $("stats").innerHTML =
+      '<div class="stat"><b>' + g.length + '</b><span>Personas anotadas</span></div>' +
+      '<div class="stat"><b>' + plates + '</b><span>Aportes comprometidos</span></div>' +
+      '<div class="stat"><b>' + covered + '/' + TASKS.length + '</b><span>Tareas con responsable</span></div>' +
+      '';
+  }
+  function renderMe() {
+    var n = me ? nameOf(me) : "";
+    $("mebar").hidden = !me;
+    $("mebarName").textContent = n;
+    var h = $("heroTag"); h.textContent = n; h.classList.toggle("blank", !n);
+    var p = me && people[me], x = $("extra");
+    if (document.activeElement !== x) x.value = (p && p.extra) || "";
+    x.disabled = !!me && !canWrite;
+  }
+  function renderTags() {
+    $("tags").innerHTML = allSlugs().map(function (s) {
+      var on = s === me, done = people[s] && people[s].going !== false;
+      return '<button class="tag" data-act="pick" data-s="' + esc(s) + '" aria-pressed="' + on + '"><div class="nt"><div class="nt-top">Hola, soy</div><div class="nt-name">' + esc(nameOf(s)) + '</div></div>' + (done ? '<span class="done" title="Ya anotado"></span>' : '') + '</button>';
+    }).join("");
+  }
+  function itemHtml(it, listKey, cat) {
+    var w = who(listKey, it.id), mine = me && (people[me] && (people[me][listKey] || []).indexOf(it.id) > -1);
+    return '<button class="item" data-act="' + (listKey === "bring" ? "bring" : "task") + '" data-id="' + it.id + '" aria-pressed="' + !!mine + '">' +
+      (mine ? '<span class="mark" aria-hidden="true">✓</span>' : '') +
+      (cat ? '<span class="cat">' + esc(cat) + '</span>' : '') +
+      '<span class="name">' + esc(it.name) + '</span>' +
+      (it.note ? '<span class="note">' + esc(it.note) + '</span>' : '') +
+      (w.length ? '<span class="who">' + w.map(function (s) { return esc(nameOf(s)); }).join(", ") + '</span>' : '') +
+      '</button>';
+  }
+  function renderMenu() {
+    $("menu").innerHTML = '<div class="items">' + MENU.map(function (c) {
+      return c.items.map(function (i) { return itemHtml(i, "bring", c.cat); }).join("");
+    }).join("") + '</div>';
+  }
+  function renderTasks() { $("tasks").innerHTML = TASKS.map(function (t) { return itemHtml(t, "tasks"); }).join(""); }
+  function lookup(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; }
+  function menuItem(id) { for (var i = 0; i < MENU.length; i++) { var f = lookup(MENU[i].items, id); if (f) return f; } }
+  function renderBoard() {
+    var rows = Object.keys(people).sort(function (a, b) { return nameOf(a).localeCompare(nameOf(b), "es"); });
+    if (!rows.length) {
+      $("board").innerHTML = '<tr><td colspan="3" style="color:var(--dim)">Todavía no se anota nadie. Elige tu etiqueta en el paso 1 para abrir el tablero.</td></tr>';
+    } else {
+      $("board").innerHTML = rows.map(function (s) {
+        var p = people[s], off = p.going === false;
+        var food = (p.bring || []).map(function (i) { var m = menuItem(i); return m ? m.name : null; }).filter(Boolean);
+        if (p.extra) food.push(p.extra);
+        var tk = (p.tasks || []).map(function (i) { var t = lookup(TASKS, i); return t ? t.name : null; }).filter(Boolean);
+        return '<tr><td class="n">' + esc(nameOf(s)) + '</td>' +
+          '<td data-l="Trae">' + (food.length ? esc(food.join(", ")) : "—") + '</td>' +
+          '<td data-l="Hace">' + (tk.length ? esc(tk.join(", ")) : "—") + '</td>' +
+          '</tr>';
+      }).join("");
+    }
+    var miss = allSlugs().filter(function (s) { return !people[s]; }).map(nameOf);
+    $("pending").innerHTML = miss.length ? 'Faltan por anotarse: <b>' + miss.map(esc).join(", ") + '</b>' : 'Ya se anotó toda la familia.';
+  }
+  function renderAll() { renderStats(); renderMe(); renderTags(); renderMenu(); renderTasks(); renderBoard(); renderBanner(); renderRiddle(); }
+
+  /* Resumen para WhatsApp */
+  function summary() {
+    var g = going();
+    var L = ["🎃 Los Sin Nombres · sábado 31 de octubre · casa de la tía Jana", "Anotados: " + g.length, "", "APORTES"];
+    g.sort(function (a, b) { return nameOf(a).localeCompare(nameOf(b), "es"); }).forEach(function (s) {
+      var p = people[s], f = (p.bring || []).map(function (i) { var m = menuItem(i); return m && m.name; }).filter(Boolean);
+      if (p.extra) f.push(p.extra);
+      if (f.length) L.push("• " + nameOf(s) + ": " + f.join(", "));
+    });
+    L.push("", "TAREAS");
+    TASKS.forEach(function (t) { var w = who("tasks", t.id); L.push("• " + t.name + ": " + (w.length ? w.map(nameOf).join(", ") : "falta alguien")); });
+    return L.join("\n");
+  }
+  function copyText(t) {
+    function fallback() {
+      var ta = document.createElement("textarea"); ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta); toast(ok ? "Resumen copiado" : "No se pudo copiar. Selecciónalo a mano.");
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { toast("Resumen copiado"); }, fallback);
+    else fallback();
+  }
+
+  /* Eventos */
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-act]"); if (!el) return;
+    var act = el.getAttribute("data-act");
+    if (act === "pick") {
+      me = el.getAttribute("data-s");
+      try { localStorage.setItem("sn_me", me); } catch (x) {}
+      renderAll(); toast("Hola, " + nameOf(me));
+      return;
+    }
+    if (act === "addname") { addName(); return; }
+    if (act === "copy") { copyText(summary()); return; }
+    if (act === "hint") { var ht = $("hintText"); ht.hidden = !ht.hidden; return; }
+    if (act === "solve") { solve(); return; }
+    if (!me) { goStep1(); return; }
+    var p = people[me] || {};
+    if (act === "bring" || act === "task") {
+      var key = act === "bring" ? "bring" : "tasks", id = el.getAttribute("data-id");
+      var list = (p[key] || []).slice(), i = list.indexOf(id);
+      if (i > -1) list.splice(i, 1); else list.push(id);
+      var patch = {}; patch[key] = list; if (p.going === false) patch.going = true;
+      save(patch);
+    }
+  });
+  function addName() {
+    var inp = $("newName"), n = inp.value.trim().replace(/\s+/g, " ").slice(0, 24);
+    if (!n) { inp.focus(); return; }
+    var s = slug(n); if (!s) { toast("Usa letras o números en el nombre"); return; }
+    if (!people[s] && !seedBySlug[s]) people[s] = { name: n, bring: [], tasks: [], going: true, _local: true };
+    me = s; try { localStorage.setItem("sn_me", me); } catch (x) {}
+    inp.value = "";
+    if (people[s] && people[s]._local) { delete people[s]._local; save({}); } else renderAll();
+    toast("Hola, " + nameOf(me));
+  }
+  $("newName").addEventListener("keydown", function (e) { if (e.key === "Enter") addName(); });
+  $("extra").addEventListener("input", function (e) { saveLater("extra", { extra: e.target.value.slice(0, 80) }); });
+
+  /* Acertijo */
+  var ACCEPT = [5795830835843141, 3881698352175350, 5472220132575185, 3368426607077453, 1108521999366046, 3215101289220932, 3097915877199021, 7999153479773488, 5835147124740269, 1849190166543044];
+  var winner = null;
+  function cyrb53(str) { var h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (var i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return 4294967296 * (2097151 & h2) + (h1 >>> 0); }
+  function norm(s) { return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z ]/g, " ").trim().replace(/\s+/g, " "); }
+  function renderRiddle() {
+    var w = $("riddleWin"), f = $("riddleForm");
+    if (winner) { w.hidden = false; w.innerHTML = '<b>' + esc(winner.name) + '</b> resolvió el acertijo y se ganó el sour extra. El mejor sour del mundo ya tiene dueño.'; f.hidden = true; }
+    else { w.hidden = true; f.hidden = false; }
+  }
+  function solve() {
+    var inp = $("ans"), v = norm(inp.value), fb = $("ansMsg");
+    if (winner) { toast("El acertijo ya fue resuelto"); return; }
+    if (!v) { inp.focus(); return; }
+    if (!me) { goStep1(); return; }
+    if (ACCEPT.indexOf(cyrb53(v)) < 0) { fb.textContent = "Esa no es. Sigue intentando."; return; }
+    fb.textContent = ""; claim();
+  }
+  async function claim() {
+    if (!sb) { toast("No hay conexión con el servidor"); return; }
+    try {
+      var r = await sb.from("halloween_riddle_winner").insert({ id: 1, slug: me, name: nameOf(me) });
+      if (r.error) {
+        if (r.error.code === "23505") { toast("Alguien ya resolvió el acertijo"); pull(); return; }
+        throw r.error;
+      }
+      winner = { slug: me, name: nameOf(me) }; renderRiddle();
+      toast("¡Correcto! Te ganaste el sour extra");
+    } catch (e) { handleErr(e); }
+  }
+  $("ans").addEventListener("keydown", function (e) { if (e.key === "Enter") solve(); });
+
+  var d = Math.ceil((FECHA - new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) / 86400000);
+  $("countdown").textContent = d > 1 ? "Faltan " + d + " días" : d === 1 ? "Es mañana" : d === 0 ? "Es hoy" : "Ya pasó la junta";
+
+  renderAll();
+
+  /* Conexion a Supabase */
+  function pull() {
+    if (!sb || inflight > 0 || Date.now() < holdUntil) return;
+    sb.from("halloween_signups").select("slug,data").then(function (r) {
+      if (r.error || !r.data || inflight > 0 || Date.now() < holdUntil) return;
+      var next = {}; r.data.forEach(function (row) { next[row.slug] = row.data || {}; });
+      people = next; renderAll();
+    });
+    sb.from("halloween_riddle_winner").select("slug,name").eq("id", 1).maybeSingle().then(function (r) {
+      if (r.error) return;
+      winner = r.data && r.data.slug ? r.data : null; renderRiddle();
+    });
+  }
+  ready = true;
+  if (window.supabase && SUPABASE_URL.indexOf("http") === 0) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    db = true;
+    pull();
+    setInterval(function () { if (!document.hidden) pull(); }, 8000);
+    try {
+      sb.channel("sin-nombres")
+        .on("postgres_changes", { event: "*", schema: "public", table: "halloween_signups" }, pull)
+        .on("postgres_changes", { event: "*", schema: "public", table: "halloween_riddle_winner" }, pull)
+        .subscribe();
+    } catch (e) {}
+  }
+  renderBanner();
+})();
+</script>
+<script>
+/* Etiquetas con inclinacion 3D */
+(function () {
+  var tg = document.getElementById("tags");
+  if (!tg) return;
+  tg.addEventListener("pointermove", function (e) {
+    var b = e.target.closest && e.target.closest(".tag"); if (!b) return;
+    var r = b.getBoundingClientRect();
+    var x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+    b.style.setProperty("--ry", (x * 18).toFixed(1) + "deg");
+    b.style.setProperty("--rx", (-y * 18).toFixed(1) + "deg");
+  });
+  function reset(e) { var b = e.target.closest && e.target.closest(".tag"); if (b) { b.style.removeProperty("--rx"); b.style.removeProperty("--ry"); } }
+  tg.addEventListener("pointerout", reset);
+  tg.addEventListener("pointerup", function (e) { if (e.pointerType !== "mouse") reset(e); });
+  tg.addEventListener("pointercancel", reset);
+})();
+
+/* Calabaza 3D */
+(function () {
+  var cv = document.getElementById("pumpkin"), wrap = document.getElementById("heroArt");
+  if (!cv || !window.THREE) return;
+  var T = THREE, renderer;
+  try { renderer = new T.WebGLRenderer({ canvas: cv, alpha: true, antialias: true }); } catch (e) { return; }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = T.sRGBEncoding;
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var scene = new T.Scene(), cam = new T.PerspectiveCamera(32, 1, 0.1, 50);
+  cam.position.set(0, 0.1, 5.2); cam.lookAt(0, 0, 0);
+
+  function face(ctx, W, H) {
+    var cx = W * 0.25, s = W * 0.03;
+    ctx.beginPath(); ctx.moveTo(cx - W * 0.075 - s, H * 0.46); ctx.lineTo(cx - W * 0.075, H * 0.46 - s * 1.2); ctx.lineTo(cx - W * 0.075 + s, H * 0.46); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + W * 0.075 - s, H * 0.46); ctx.lineTo(cx + W * 0.075, H * 0.46 - s * 1.2); ctx.lineTo(cx + W * 0.075 + s, H * 0.46); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.5, H * 0.545); ctx.lineTo(cx, H * 0.515); ctx.lineTo(cx + s * 0.5, H * 0.545); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); var mx = cx - W * 0.105, n = 8, st = W * 0.21 / n;
+    ctx.moveTo(mx, H * 0.6);
+    for (var i = 0; i <= n; i++) ctx.lineTo(mx + i * st, H * (i % 2 ? 0.665 : 0.625));
+    for (var j = n; j >= 0; j--) ctx.lineTo(mx + j * st, H * 0.6 + Math.abs(Math.sin(j / n * Math.PI)) * H * -0.03);
+    ctx.closePath(); ctx.fill();
+  }
+  function tex(draw) {
+    var c = document.createElement("canvas"); c.width = 1024; c.height = 512;
+    var x = c.getContext("2d"); draw(x, 1024, 512);
+    var t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding;
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
+  }
+  var colorMap = tex(function (x, W, H) {
+    x.fillStyle = "#f07a12"; x.fillRect(0, 0, W, H);
+    for (var i = 0; i < 10; i++) { var g = x.createLinearGradient(i * W / 10, 0, (i + 1) * W / 10, 0); g.addColorStop(0, "rgba(90,30,0,0.28)"); g.addColorStop(0.5, "rgba(255,170,60,0.10)"); g.addColorStop(1, "rgba(90,30,0,0.28)"); x.fillStyle = g; x.fillRect(i * W / 10, 0, W / 10, H); }
+    x.fillStyle = "#2b0f00"; face(x, W, H);
+  });
+  var glowMap = tex(function (x, W, H) {
+    x.fillStyle = "#000"; x.fillRect(0, 0, W, H);
+    x.fillStyle = "#ffc247"; x.shadowColor = "#ff9a1f"; x.shadowBlur = 22; face(x, W, H);
+  });
+
+  var g = new T.SphereGeometry(1, 96, 64), p = g.attributes.position;
+  for (var k = 0; k < p.count; k++) {
+    var x = p.getX(k), y = p.getY(k), z = p.getZ(k);
+    var th = Math.atan2(z, x), rib = 1 + 0.055 * Math.cos(th * 10);
+    var d = Math.max(0, (Math.abs(y) - 0.68) / 0.32);
+    p.setXYZ(k, x * 1.2 * rib * (1 - 0.1 * d * d), y * 0.92 * (1 - 0.3 * d * d), z * 1.2 * rib * (1 - 0.1 * d * d));
+  }
+  g.computeVertexNormals();
+  var mat = new T.MeshStandardMaterial({ map: colorMap, emissive: 0xffffff, emissiveMap: glowMap, emissiveIntensity: 1.1, roughness: 0.5, metalness: 0 });
+  var body = new T.Mesh(g, mat);
+  var stem = new T.Mesh(new T.CylinderGeometry(0.09, 0.17, 0.42, 14), new T.MeshStandardMaterial({ color: 0x5d6a2a, roughness: 0.8 }));
+  stem.position.set(0.04, 0.9, 0); stem.rotation.z = -0.28;
+  var grp = new T.Group(); grp.add(body); grp.add(stem); scene.add(grp);
+  scene.add(new T.AmbientLight(0xffffff, 0.55));
+  var key = new T.DirectionalLight(0xfff0d8, 0.85); key.position.set(3, 4, 5); scene.add(key);
+  var rim = new T.DirectionalLight(0x9a6bff, 0.7); rim.position.set(-4, 1, -3); scene.add(rim);
+  var flame = new T.PointLight(0xffa040, 1.1, 9); flame.position.set(0, 0, 2.6); scene.add(flame);
+
+  function size() {
+    var w = wrap.clientWidth || 250, h = wrap.clientHeight || 250;
+    renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
+  }
+  size(); window.addEventListener("resize", size);
+
+  var off = 0, offX = 0, dragging = false, lastX = 0, lastY = 0, running = false, t0 = performance.now();
+  function draw(now) {
+    var t = (now - t0) / 1000;
+    if (!dragging) { off *= 0.93; offX *= 0.9; }
+    grp.rotation.y = (reduce ? 0.35 : Math.sin(t * 0.6) * 0.45) + off;
+    grp.rotation.x = -0.08 + offX;
+    grp.position.y = reduce ? 0 : Math.sin(t * 1.4) * 0.06;
+    flame.intensity = reduce ? 1.1 : 1.0 + 0.3 * Math.sin(t * 9) * Math.sin(t * 3.7);
+    renderer.render(scene, cam);
+  }
+  function loop(now) { if (!running) return; draw(now); requestAnimationFrame(loop); }
+  function start() { if (running || reduce) return; running = true; requestAnimationFrame(loop); }
+  function stop() { running = false; }
+  draw(performance.now());
+  wrap.classList.add("has3d");
+
+  cv.addEventListener("pointerdown", function (e) { dragging = true; lastX = e.clientX; lastY = e.clientY; try { cv.setPointerCapture(e.pointerId); } catch (x) {} });
+  cv.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+    off += (e.clientX - lastX) * 0.014; offX = Math.max(-0.5, Math.min(0.5, offX + (e.clientY - lastY) * 0.006));
+    lastX = e.clientX; lastY = e.clientY;
+    if (reduce) draw(performance.now());
+  });
+  function release() { dragging = false; off = ((off + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; }
+  cv.addEventListener("pointerup", release); cv.addEventListener("pointercancel", release);
+
+  if ("IntersectionObserver" in window) new IntersectionObserver(function (en) { if (en[0].isIntersecting) start(); else stop(); }).observe(wrap); else start();
+  document.addEventListener("visibilitychange", function () { if (document.hidden) stop(); else start(); });
+})();
+</script>
+</body>
+</html>
