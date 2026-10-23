@@ -253,6 +253,7 @@ table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 0.9
 th, td { text-align: left; padding: 10px 12px; vertical-align: top; border-bottom: 1px solid var(--line); }
 th { font-size: 0.76rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); background: var(--surface2); }
 tr:last-child td { border-bottom: 0; }
+tr.off td:not(.n) { color: var(--dim); font-style: italic; }
 td.n { font-family: var(--f-hand); color: var(--accent-text); white-space: nowrap; }
 .pending { margin-top: 12px; color: var(--dim); }
 .pending b { color: var(--ink); }
@@ -374,7 +375,7 @@ img { max-width: 100%; }
     <div class="step-head"><span class="step-no">Paso 3</span><h2>¿Qué haces tú?</h2></div>
     <p class="lead">Cocinar, ornamentar, limpiar. Puedes tomar más de una tarea.</p>
     <div class="items" id="tasks"></div>
-    <div class="actions"><button class="btn primary" data-act="save">Guardar mis respuestas</button><span class="pending" id="saveMsg" aria-live="polite"></span></div>
+    <div class="actions"><button class="btn primary" data-act="save">Guardar mis respuestas</button><button class="btn" id="nogoBtn" data-act="nogo">No voy a poder ir</button><span class="pending" id="saveMsg" aria-live="polite"></span></div>
   </section>
 
   <section class="step" id="paso5">
@@ -593,10 +594,12 @@ img { max-width: 100%; }
   }
   function renderMe() {
     var n = me ? nameOf(me) : "";
+    var p = me && people[me], off = !!p && p.going === false;
     $("mebar").hidden = !me;
-    $("mebarName").textContent = n;
+    $("mebarName").textContent = n + (off ? " (no asistirá)" : "");
+    $("nogoBtn").textContent = off ? "Sí voy a poder ir" : "No voy a poder ir";
     var h = $("heroTag"); h.textContent = n; h.classList.toggle("blank", !n);
-    var p = me && people[me], x = $("extra");
+    var x = $("extra");
     if (document.activeElement !== x) x.value = (p && p.extra) || "";
     x.disabled = !!me && !canWrite;
   }
@@ -631,6 +634,7 @@ img { max-width: 100%; }
     } else {
       $("board").innerHTML = rows.map(function (s) {
         var p = people[s], off = p.going === false;
+        if (off) return '<tr class="off"><td class="n">' + esc(nameOf(s)) + '</td><td data-l="Estado" colspan="2">No asistirá</td></tr>';
         var food = (p.bring || []).map(function (i) { var m = menuItem(i); return m ? m.name : null; }).filter(Boolean);
         if (p.extra) food.push(p.extra);
         var tk = (p.tasks || []).map(function (i) { var t = lookup(TASKS, i); return t ? t.name : null; }).filter(Boolean);
@@ -641,14 +645,17 @@ img { max-width: 100%; }
       }).join("");
     }
     var miss = allSlugs().filter(function (s) { return !people[s]; }).map(nameOf);
-    $("pending").innerHTML = miss.length ? 'Faltan por anotarse: <b>' + miss.map(esc).join(", ") + '</b>' : 'Ya se anotó toda la familia.';
+    var nogo = Object.keys(people).filter(function (s) { return people[s].going === false; }).map(nameOf);
+    $("pending").innerHTML = (miss.length ? 'Faltan por anotarse: <b>' + miss.map(esc).join(", ") + '</b>' : 'Ya se anotó toda la familia.') +
+      (nogo.length ? '<br>No asistirán: <b>' + nogo.map(esc).join(", ") + '</b>' : '');
   }
   function renderAll() { renderStats(); renderMe(); renderTags(); renderMenu(); renderTasks(); renderBoard(); renderBanner(); renderRiddle(); renderRank(); if (window.SNFly) window.SNFly.refresh(); }
 
   /* Resumen para WhatsApp */
   function summary() {
     var g = going();
-    var L = ["🎃 Los Sin Nombres · sábado 31 de octubre · casa de la tía Jana", "Anotados: " + g.length, "", "APORTES"];
+    var nogo = Object.keys(people).filter(function (s) { return people[s].going === false; }).map(nameOf).sort(function (a, b) { return a.localeCompare(b, "es"); });
+    var L = ["🎃 Los Sin Nombres · sábado 31 de octubre · casa de la tía Jana", "Anotados: " + g.length + (nogo.length ? " · No asistirán: " + nogo.join(", ") : ""), "", "APORTES"];
     g.sort(function (a, b) { return nameOf(a).localeCompare(nameOf(b), "es"); }).forEach(function (s) {
       var p = people[s], f = (p.bring || []).map(function (i) { var m = menuItem(i); return m && m.name; }).filter(Boolean);
       if (p.extra) f.push(p.extra);
@@ -688,6 +695,12 @@ img { max-width: 100%; }
     if (act === "unlock") { tryUnlock(); return; }
     if (!me) { goStep1(); return; }
     if (act === "save") { saveNow(); return; }
+    if (act === "nogo") {
+      var yaNo = !!people[me] && people[me].going === false;
+      save({ going: yaNo });
+      toast(yaNo ? "¡Qué bueno! Vuelves a la lista" : "Anotado: no vas a poder ir");
+      return;
+    }
     var p = people[me] || {};
     if (act === "bring" || act === "task") {
       var key = act === "bring" ? "bring" : "tasks", id = el.getAttribute("data-id");
