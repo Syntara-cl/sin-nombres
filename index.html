@@ -149,8 +149,7 @@ h1 em { font-style: normal; color: var(--accent-text); }
 .rank { list-style: none; counter-reset: r; padding: 0; margin: 0; display: grid; gap: 6px; max-width: 420px; }
 .rank li { counter-increment: r; display: flex; gap: 10px; align-items: baseline; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .rank li::before { content: counter(r); font-weight: 800; color: var(--accent-text); min-width: 1.5ch; }
-.rank li span { flex: 1; overflow-wrap: anywhere; }
-.rank li b { font-variant-numeric: tabular-nums; }
+.rank li span { flex: 1; overflow-wrap: anywhere; }.rank li b { font-variant-numeric: tabular-nums; }
 .rank li.me { border-color: var(--accent); }
 @media (max-width: 640px) { .arena { height: 300px; } }
 .fly { max-width: 900px; }
@@ -732,7 +731,7 @@ img { max-width: 100%; }
   /* Cazafantasmas: sin limite de tiempo, termina al primer error; la dificultad sube con los puntos. Mejor puntaje por persona en halloween_scores */
   var scores = {}, G = { on: false, score: 0, spawn: null };
   function renderRank() {
-    var rows = Object.keys(scores).map(function (s) { return { s: s, n: scores[s].name, b: scores[s].best }; })
+    var rows = Object.keys(scores).map(function (s) { return { s: s, n: scores[s].name, b: scores[s].best, t: scores[s].tries || 0 }; })
       .sort(function (a, b) { return b.b - a.b || a.n.localeCompare(b.n, "es"); }).slice(0, 10);
     $("rank").innerHTML = rows.map(function (r) { return '<li' + (r.s === me ? ' class="me"' : '') + '><span>' + esc(r.n) + '</span><b>' + r.b + '</b></li>'; }).join("");
     $("rankEmpty").hidden = rows.length > 0;
@@ -777,17 +776,13 @@ img { max-width: 100%; }
     G.on = false; clearTimeout(G.spawn); clearTargets(); $("arena").classList.remove("on");
     $("playBtn").disabled = false; $("playBtn").textContent = "Jugar otra vez";
     var m = $("arenaMsg"), final = G.score, id = me, name = nameOf(me);
-    var prev = scores[id] ? scores[id].best : 0;
+    var prev = scores[id] ? scores[id].best : 0, tries = (scores[id] ? scores[id].tries || 0 : 0) + 1;
     m.hidden = false; m.textContent = why + ". Hiciste " + final + (final === 1 ? " punto" : " puntos");
-    if (final > prev) {
-      scores[id] = { name: name, best: final }; renderRank();
-      $("gMsg").textContent = "Guardando tu récord...";
-      sb.from("halloween_scores").upsert({ slug: id, name: name, best: final, updated_at: new Date().toISOString() }).then(function (r) {
-        $("gMsg").textContent = r && r.error ? "No se pudo guardar tu récord. Intenta de nuevo." : "¡Nuevo récord! " + final + " puntos";
-      });
-    } else {
-      $("gMsg").textContent = "Tu récord sigue en " + prev + ". ¡Otra vez!";
-    }
+    scores[id] = { name: name, best: Math.max(prev, final), tries: tries }; renderRank();
+    $("gMsg").textContent = "Guardando...";
+    sb.from("halloween_scores").upsert({ slug: id, name: name, best: Math.max(prev, final), tries: tries, updated_at: new Date().toISOString() }).then(function (r) {
+      $("gMsg").textContent = r && r.error ? "No se pudo guardar. Intenta de nuevo." : final > prev ? "¡Nuevo récord! " + final + " puntos" : "Tu récord sigue en " + prev + ". ¡Otra vez!";
+    });
   }
   $("arena").addEventListener("pointerdown", function (e) {
     var t = e.target.closest ? e.target.closest(".tgt") : null;
@@ -838,10 +833,10 @@ img { max-width: 100%; }
       var next = {}; r.data.forEach(function (row) { next[row.slug] = row.data || {}; });
       people = next; renderAll();
     });
-    sb.from("halloween_scores").select("slug,name,best").then(function (r) {
+    sb.from("halloween_scores").select("slug,name,best,tries").then(function (r) {
       if (r.error || !r.data) return;
-      var n = {}; r.data.forEach(function (row) { n[row.slug] = { name: row.name, best: row.best }; });
-      if (me && scores[me] && (!n[me] || scores[me].best > n[me].best)) n[me] = scores[me];
+      var n = {}; r.data.forEach(function (row) { n[row.slug] = { name: row.name, best: row.best, tries: row.tries || 0 }; });
+      if (me && scores[me] && (!n[me] || (scores[me].tries || 0) > (n[me].tries || 0) || scores[me].best > n[me].best)) n[me] = scores[me];
       scores = n; renderRank();
     });
     sb.from("halloween_riddle_winner").select("slug,name").eq("id", 1).maybeSingle().then(function (r) {
@@ -991,7 +986,7 @@ img { max-width: 100%; }
 
   function renderRank() {
     var m = me();
-    var rows = Object.keys(scores).map(function (s) { return { s: s, n: scores[s].name, b: scores[s].best }; })
+    var rows = Object.keys(scores).map(function (s) { return { s: s, n: scores[s].name, b: scores[s].best, t: scores[s].tries || 0 }; })
       .sort(function (a, b) { return b.b - a.b || a.n.localeCompare(b.n, "es"); }).slice(0, 10);
     $("rankFly").innerHTML = rows.map(function (r) { return '<li' + (r.s === m ? ' class="me"' : '') + '><span>' + esc(r.n) + '</span><b>' + r.b + '</b></li>'; }).join("");
     $("rankFlyEmpty").hidden = rows.length > 0;
@@ -999,10 +994,10 @@ img { max-width: 100%; }
   }
   function pull() {
     var sb = SN.getSb && SN.getSb(); if (!sb) return;
-    sb.from(TABLE).select("slug,name,best").then(function (r) {
+    sb.from(TABLE).select("slug,name,best,tries").then(function (r) {
       if (r.error || !r.data) return;
-      var n = {}, m = me(); r.data.forEach(function (row) { n[row.slug] = { name: row.name, best: row.best }; });
-      if (m && scores[m] && (!n[m] || scores[m].best > n[m].best)) n[m] = scores[m];
+      var n = {}, m = me(); r.data.forEach(function (row) { n[row.slug] = { name: row.name, best: row.best, tries: row.tries || 0 }; });
+      if (m && scores[m] && (!n[m] || (scores[m].tries || 0) > (n[m].tries || 0) || scores[m].best > n[m].best)) n[m] = scores[m];
       scores = n; renderRank();
     });
   }
@@ -1253,15 +1248,14 @@ img { max-width: 100%; }
     var m = me(), final = Math.floor(S.dist), name = SN.nameOf ? SN.nameOf(m) : "", prev = scores[m] ? scores[m].best : 0, msg = $("flyMsg");
     $("flyPlay").disabled = false; $("flyPlay").textContent = "Volar otra vez";
     msg.hidden = false; msg.textContent = "¡Chocaste! Volaste " + final + (final === 1 ? " metro" : " metros");
-    if (final > prev) {
-      scores[m] = { name: name, best: final }; renderRank();
-      $("fMsg").textContent = "Guardando tu récord...";
-      var sb = SN.getSb && SN.getSb();
-      if (!sb) { $("fMsg").textContent = "Sin conexión: no se guardó tu récord."; return; }
-      sb.from(TABLE).upsert({ slug: m, name: name, best: final, updated_at: new Date().toISOString() }).then(function (r) {
-        $("fMsg").textContent = r && r.error ? "No se pudo guardar tu récord. Intenta de nuevo." : "¡Nuevo récord! " + final + " metros";
-      });
-    } else $("fMsg").textContent = "Tu récord sigue en " + prev + ". ¡Otra vez!";
+    var tries = (scores[m] ? scores[m].tries || 0 : 0) + 1;
+    scores[m] = { name: name, best: Math.max(prev, final), tries: tries }; renderRank();
+    $("fMsg").textContent = "Guardando...";
+    var sb = SN.getSb && SN.getSb();
+    if (!sb) { $("fMsg").textContent = "Sin conexión: no se guardó."; return; }
+    sb.from(TABLE).upsert({ slug: m, name: name, best: Math.max(prev, final), tries: tries, updated_at: new Date().toISOString() }).then(function (r) {
+      $("fMsg").textContent = r && r.error ? "No se pudo guardar. Intenta de nuevo." : final > prev ? "¡Nuevo récord! " + final + " metros" : "Tu récord sigue en " + prev + ". ¡Otra vez!";
+    });
   }
   function start() {
     if (S.mode !== "idle") return;

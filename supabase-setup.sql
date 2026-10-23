@@ -77,3 +77,6 @@ create policy halloween_scores_vuelo_insert on public.halloween_scores_vuelo for
 create policy halloween_scores_vuelo_update on public.halloween_scores_vuelo for update to anon using (true) with check (true);
 
 grant select, insert, update on public.halloween_scores_vuelo to anon;
+
+alter table public.halloween_scores add column if not exists tries int not null default 0;
+alter table public.halloween_scores_vuelo add column if not exists tries int not null default 0;
