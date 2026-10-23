@@ -412,7 +412,25 @@ body.tv .url { font-family: var(--f-hand); color: var(--accent); font-size: clam
     if (me && myName) join(); else pickScreen();
   }
 
-  if (TV) runTV(); else runPlayer();
+  /* Candado de cortesia del juego sorpresa (solo huella de la clave; el mismo que usa la pagina principal) */
+  var KEY_HASH = 6860280117649515;
+  function cyrb53(str) { var h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (var i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return 4294967296 * (2097151 & h2) + (h1 >>> 0); }
+  function normKey(s) { return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, ""); }
+  function isUnlocked() { try { return localStorage.getItem("sn_unlock") === String(KEY_HASH); } catch (e) { return false; } }
+  function lockScreen() {
+    $app.innerHTML = header + '<div class="card center"><h2>🔒 Juego sorpresa</h2><p class="dim">Se presenta el sábado 31. Cuando llegue el momento, el Líder supremo dirá la clave.</p><div class="addname"><input type="text" id="k" maxlength="30" placeholder="Clave" autocomplete="off" autocapitalize="none" aria-label="Clave"><button class="btn primary" id="kb">Desbloquear</button></div><p class="dim" id="km" aria-live="polite"></p></div>';
+    function go() {
+      var v = normKey(document.getElementById("k").value);
+      if (!v) return;
+      if (cyrb53(v) !== KEY_HASH) { document.getElementById("km").textContent = "Esa no es la clave."; return; }
+      try { localStorage.setItem("sn_unlock", String(KEY_HASH)); } catch (e) {}
+      location.reload();
+    }
+    document.getElementById("kb").onclick = go;
+    document.getElementById("k").addEventListener("keydown", function (e) { if (e.key === "Enter") go(); });
+  }
+
+  if (!isUnlocked()) lockScreen(); else if (TV) runTV(); else runPlayer();
 })();
 </script>
 </body>
