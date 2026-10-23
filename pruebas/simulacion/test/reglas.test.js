@@ -1,7 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { slug, crearSala, canalDeSala, resolverNavegador } = require("../src/config");
-const { verificarRonda, verificarPodio, verificarTransiciones } = require("../src/verificador");
+const { verificarRonda, verificarPodio, verificarTransiciones, verificarPresencia } = require("../src/verificador");
 
 test("slug coincide con el contrato y limita a 40 caracteres", () => {
   assert.equal(slug(" Tía Jana! "), "tia-jana");
@@ -37,7 +37,21 @@ test("podio comprueba orden, integrantes y puestos compartidos", () => {
   const rank = [{ slug: "a", score: 100 }, { slug: "b", score: 100 }, { slug: "c", score: 0 }];
   assert.equal(verificarPodio(rank, ["a", "b", "c"], [1, 1, 3]).every(a => a.ok), true);
   assert.equal(verificarPodio(rank, ["a", "b", "c"], [1, 2, 3]).every(a => a.ok), false);
-  assert.equal(verificarPodio([rank[2], rank[0], rank[1]], ["a", "b", "c"]).every(a => a.ok), false);
+  assert.equal(verificarPodio([rank[2], rank[0], rank[1]], ["a", "b", "c"], [3, 1, 1]).every(a => a.ok), false);
+});
+test("podio rechaza puestos omitidos o que no sean un arreglo", () => {
+  const rank = [{ slug: "a", score: 100 }];
+  for (const puestos of [undefined, null, { 0: 1 }]) {
+    assert.equal(verificarPodio(rank, ["a"], puestos).find(a => a.nombre === "puestos compartidos").ok, false);
+  }
+});
+test("presencia restaurada falla con 12 jugadores y pasa con 13, sin contar TV", () => {
+  const presencia = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`j${i}`, [{ slug: `j${i}`, name: `Jugador ${i}` }]]));
+  presencia.tv = [{ tv: true }];
+  assert.equal(verificarPresencia(presencia).ok, false);
+  assert.equal(verificarPresencia(presencia).evidencia.jugadores, 12);
+  presencia.j12 = [{ slug: "j12", name: "Jugador 12" }];
+  assert.equal(verificarPresencia(presencia).ok, true);
 });
 test("reenvíos no son doble reveal; regresar a question y revelar sí lo es", () => {
   const q = { phase: "question", round: 3 }, r = { phase: "reveal", round: 3 };

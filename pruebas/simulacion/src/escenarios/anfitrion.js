@@ -8,7 +8,8 @@ module.exports = (config, opciones, servidor) => ejecutar(config, opciones, serv
   await esperar(() => c.jugadores.every(j => j.estado.phase === "lobby" && j.estado.at >= desde), 6000, "todos vuelven al lobby");
   c.check("recarga pierde partida y avisa lobby ≤6 s", c.jugadores.every(j => j.estado.at - desde <= 6000), c.jugadores.map(j => ({ nombre: j.nombre, ms: j.estado.at - desde })));
   await c.tv.esperarJugadores(13);
-  c.check("13 jugadores siguen presentes tras recarga", true, { conectados: 13 });
+  const conectados = await c.tv.page.$$eval(".chip", els => els.length);
+  c.check("13 jugadores siguen presentes tras recarga", conectados === 13, { conectados });
   // Separar los estados de la partida perdida: su round=1 se reutiliza al reiniciar.
   c.reporte.partidaPerdida = c.tv.estados.splice(0);
   for (const j of c.jugadores) j.votos = [];

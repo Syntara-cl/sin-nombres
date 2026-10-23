@@ -1,5 +1,9 @@
 const { isDeepStrictEqual: igual } = require("node:util");
 const asercion = (nombre, ok, evidencia) => ({ nombre, ok: Boolean(ok), evidencia });
+function verificarPresencia(presencia) {
+  const jugadores = Object.values(presencia).flat().filter(p => p.slug).length;
+  return asercion("presencia restaurada a 13", jugadores === 13, { jugadores });
+}
 function verificarRonda(s, enviados, anteriores) {
   const votos = {}; enviados.forEach(v => { votos[v.slug] = v; });
   const counts = Object.fromEntries(s.options.map(o => [o.slug, 0]));
@@ -23,11 +27,11 @@ function verificarPodio(rank, participantes, puestos) {
   const esperados = rank.map(r => 1 + rank.filter(x => x.score > r.score).length);
   return [asercion("orden del podio", rank.every((r, i) => !i || rank[i - 1].score >= r.score), rank),
     asercion("integrantes del podio", igual(rank.map(r => r.slug).sort(), [...participantes].sort()), rank),
-    asercion("puestos compartidos", puestos === undefined || igual(puestos, esperados), { esperados, puestos })];
+    asercion("puestos compartidos", Array.isArray(puestos) && igual(puestos, esperados), { esperados, puestos })];
 }
 function verificarTransiciones(estados, round) {
   let previo = "", n = 0;
   for (const s of estados) { const key = `${s.phase}:${s.round}`; if (key !== previo && s.phase === "reveal" && s.round === round) n++; previo = key; }
   return asercion("reveal único", n === 1, { round, transiciones: n });
 }
-module.exports = { asercion, verificarRonda, verificarPodio, verificarTransiciones };
+module.exports = { asercion, verificarRonda, verificarPodio, verificarTransiciones, verificarPresencia };

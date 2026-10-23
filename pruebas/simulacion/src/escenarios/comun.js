@@ -2,7 +2,7 @@ const { Jugador } = require("../jugador");
 const { Anfitrion } = require("../anfitrion");
 const { crearSala, canalDeSala } = require("../config");
 const { esperar, pausa } = require("../util");
-const { asercion, verificarRonda, verificarPodio, verificarTransiciones } = require("../verificador");
+const { asercion, verificarRonda, verificarPodio, verificarTransiciones, verificarPresencia } = require("../verificador");
 const { crearCerebro: aleatorio } = require("../cerebros/aleatorio");
 const { crearCerebro: llm, REPARTO, PERSONAS, crearLimitador } = require("../cerebros/llm");
 
@@ -30,7 +30,8 @@ class Contexto {
       const desde = Date.now();
       await j.conectar();
       await esperar(() => j.estados.find(s => s.at >= desde), 4000, `estado inicial ${nombre}`);
-      this.check(`estado al entrar: ${nombre}`, true, { ms: Date.now() - desde, phase: j.estado.phase });
+      const ms = Date.now() - desde;
+      this.check(`estado al entrar: ${nombre}`, ms <= 4000, { ms, phase: j.estado.phase });
       await pausa(175);
     }
   }
@@ -49,9 +50,8 @@ class Contexto {
       this.check(`estado tras reconectar ${j.nombre}`, s.at - desde <= 4000, { ms: s.at - desde, phase: s.phase, round: s.round });
       await pausa(175);
     }
-    await esperar(() => Object.values(this.jugadores[0].presencia).flat().filter(p => p.slug).length === 13, 5000, "presencia vuelve a 13");
-    const vc = await this.tv.page.$eval("#vc", e => e.textContent).catch(() => null);
-    this.check("presencia restaurada a 13", true, { jugadores: 13, vc });
+    await esperar(() => verificarPresencia(this.jugadores[0].presencia).ok, 5000, "presencia vuelve a 13");
+    this.reporte.aserciones.push(verificarPresencia(this.jugadores[0].presencia));
   }
   async decidir(j, q) {
     const decision = await j.cerebro.decidir({ nombre: j.nombre, persona: PERSONAS[j.nombre], pregunta: q.q, opciones: q.options.map(o => o.name), historial: j.historial, tiempoMs: q.left });
@@ -117,7 +117,7 @@ class Contexto {
     const ultimos = Object.values(Object.fromEntries(votos.map(v => [v.slug, v])));
     const tabla = ultimos.map(v => ({ ...v, coincide: r.winners.includes(v.choice) }));
     this.reporte.rondas.push({ round, pregunta: q.q, votos: tabla, resultado: r });
-    for (const j of this.jugadores) { const v = votos.find(v => v.slug === j.slug); j.historial.push({ pregunta: q.q, ganador: r.options.filter(o => r.winners.includes(o.slug)).map(o => o.name).join(", "), voto: v?.voto, coincidio: v ? r.winners.includes(v.choice) : false }); }
+    for (const j of this.jugadores) { const v = ultimos.find(v => v.slug === j.slug); j.historial.push({ pregunta: q.q, ganador: r.options.filter(o => r.winners.includes(o.slug)).map(o => o.name).join(", "), voto: v?.voto, coincidio: v ? r.winners.includes(v.choice) : false }); }
     this.anteriores = { ...r.scores };
     return r;
   }
