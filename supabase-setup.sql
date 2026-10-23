@@ -37,3 +37,24 @@ grant select, insert on public.halloween_riddle_winner to anon;
 -- Sin esto la pagina igual se actualiza sola cada 8 segundos.
 alter publication supabase_realtime add table public.halloween_signups;
 alter publication supabase_realtime add table public.halloween_riddle_winner;
+
+create table if not exists public.halloween_scores (
+  slug text primary key,
+  name text not null,
+  best int not null default 0 check (best >= 0),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.halloween_scores enable row level security;
+
+drop policy if exists halloween_scores_select on public.halloween_scores;
+drop policy if exists halloween_scores_insert on public.halloween_scores;
+drop policy if exists halloween_scores_update on public.halloween_scores;
+
+create policy halloween_scores_select on public.halloween_scores for select to anon using (true);
+create policy halloween_scores_insert on public.halloween_scores for insert to anon with check (true);
+create policy halloween_scores_update on public.halloween_scores for update to anon using (true) with check (true);
+
+grant select, insert, update on public.halloween_scores to anon;
+
+alter publication supabase_realtime add table public.halloween_scores;

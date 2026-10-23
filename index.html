@@ -129,6 +129,22 @@ h1 em { font-style: normal; color: var(--accent-text); }
 .hint[hidden], .win[hidden], #riddleForm[hidden] { display: none; }
 .win { background: var(--accent); color: var(--accent-ink); border-radius: 8px; padding: 12px 14px; font-weight: 700; margin-top: 6px; }
 
+/* Juego */
+.game { max-width: 680px; }
+.game-hud { display: flex; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; margin-bottom: 8px; font-weight: 700; color: var(--dim); }
+.game-hud b { font-variant-numeric: tabular-nums; font-size: 1.35rem; color: var(--ink); }
+.arena { position: relative; height: 340px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.arena-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; color: var(--dim); font-weight: 700; }
+.tgt { position: absolute; width: 58px; height: 58px; font-size: 2.5rem; line-height: 58px; text-align: center; border: 0; background: none; padding: 0; animation: pop 0.14s ease-out; }
+@keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.rank { list-style: none; counter-reset: r; padding: 0; margin: 0; display: grid; gap: 6px; max-width: 420px; }
+.rank li { counter-increment: r; display: flex; gap: 10px; align-items: baseline; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.rank li::before { content: counter(r); font-weight: 800; color: var(--accent-text); min-width: 1.5ch; }
+.rank li span { flex: 1; overflow-wrap: anywhere; }
+.rank li b { font-variant-numeric: tabular-nums; }
+.rank li.me { border-color: var(--accent); }
+@media (max-width: 640px) { .arena { height: 300px; } }
+
 /* Etiqueta */
 .nt { background: var(--paper); color: var(--paper-ink); border-radius: 7px; overflow: hidden; box-shadow: 0 2px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
 .nt-top { background: var(--accent); color: var(--accent-ink); text-align: center; font-weight: 800; letter-spacing: 0.14em; font-size: 0.62rem; padding: 4px 4px 3px; text-transform: uppercase; }
@@ -380,6 +396,19 @@ img { max-width: 100%; }
     </div>
   </section>
 
+  <section class="step" id="juego">
+    <div class="step-head"><span class="step-no">El desafío</span><h2>Cazafantasmas</h2></div>
+    <p class="lead">30 segundos. Toca los fantasmas 👻 y sumas 1. Si tocas una calabaza 🎃 o un murciélago 🦇 pierdes 2. Puedes jugar todas las veces que quieras: se guarda tu mejor puntaje y el sábado el número uno se lleva un sour extra.</p>
+    <div class="game">
+      <div class="game-hud"><span>Tiempo <b id="gTime">30</b></span><span>Puntos <b id="gScore">0</b></span><span>Tu récord <b id="gBest">0</b></span></div>
+      <div class="arena" id="arena" aria-label="Zona de juego"><div class="arena-msg" id="arenaMsg">Elige tu nombre en el paso 1 y presiona Jugar</div></div>
+      <div class="actions"><button class="btn primary" id="playBtn" data-act="play">Jugar</button><span class="pending" id="gMsg" aria-live="polite"></span></div>
+    </div>
+    <h3>Ranking</h3>
+    <ol class="rank" id="rank"></ol>
+    <p class="pending" id="rankEmpty">Todavía nadie ha jugado. ¡Sé el primero!</p>
+  </section>
+
   <footer><div class="sig"><span class="sig-name">Fabián A.</span><span class="sig-line">Líder supremo</span></div><span class="f">Nos vemos el 31</span>Los Sin Nombres · Halloween 2026</footer>
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
@@ -568,7 +597,7 @@ img { max-width: 100%; }
     var miss = allSlugs().filter(function (s) { return !people[s]; }).map(nameOf);
     $("pending").innerHTML = miss.length ? 'Faltan por anotarse: <b>' + miss.map(esc).join(", ") + '</b>' : 'Ya se anotó toda la familia.';
   }
-  function renderAll() { renderStats(); renderMe(); renderTags(); renderMenu(); renderTasks(); renderBoard(); renderBanner(); renderRiddle(); }
+  function renderAll() { renderStats(); renderMe(); renderTags(); renderMenu(); renderTasks(); renderBoard(); renderBanner(); renderRiddle(); renderRank(); }
 
   /* Resumen para WhatsApp */
   function summary() {
@@ -608,6 +637,7 @@ img { max-width: 100%; }
     if (act === "copy") { copyText(summary()); return; }
     if (act === "hint") { var ht = $("hintText"); ht.hidden = !ht.hidden; return; }
     if (act === "solve") { solve(); return; }
+    if (act === "play") { startGame(); return; }
     if (!me) { goStep1(); return; }
     if (act === "save") { saveNow(); return; }
     var p = people[me] || {};
@@ -670,6 +700,71 @@ img { max-width: 100%; }
   }
   $("ans").addEventListener("keydown", function (e) { if (e.key === "Enter") solve(); });
 
+  /* Cazafantasmas: 30 s, mejor puntaje por persona en halloween_scores */
+  var scores = {}, G = { on: false, score: 0, left: 30, tick: null, spawn: null };
+  function renderRank() {
+    var rows = Object.keys(scores).map(function (s) { return { s: s, n: scores[s].name, b: scores[s].best }; })
+      .sort(function (a, b) { return b.b - a.b || a.n.localeCompare(b.n, "es"); }).slice(0, 10);
+    $("rank").innerHTML = rows.map(function (r) { return '<li' + (r.s === me ? ' class="me"' : '') + '><span>' + esc(r.n) + '</span><b>' + r.b + '</b></li>'; }).join("");
+    $("rankEmpty").hidden = rows.length > 0;
+    $("gBest").textContent = me && scores[me] ? scores[me].best : 0;
+  }
+  function gameShow() { $("gTime").textContent = G.left; $("gScore").textContent = Math.max(0, G.score); }
+  function clearTargets() { var a = $("arena"); [].slice.call(a.querySelectorAll(".tgt")).forEach(function (t) { a.removeChild(t); }); }
+  function addTarget() {
+    var a = $("arena"), el = Math.min(30, 30 - G.left), r = Math.random();
+    var kind = r < 0.62 ? "g" : r < 0.82 ? "p" : "b";
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "tgt"; b.setAttribute("data-k", kind);
+    b.setAttribute("aria-label", kind === "g" ? "Fantasma" : kind === "p" ? "Calabaza" : "Murciélago");
+    b.textContent = kind === "g" ? "👻" : kind === "p" ? "🎃" : "🦇";
+    b.style.left = Math.round(Math.random() * Math.max(0, a.clientWidth - 58)) + "px";
+    b.style.top = Math.round(Math.random() * Math.max(0, a.clientHeight - 58)) + "px";
+    a.appendChild(b);
+    setTimeout(function () { if (b.parentNode) b.parentNode.removeChild(b); }, Math.max(650, 1300 - el * 20));
+  }
+  function spawnLoop() {
+    if (!G.on) return;
+    addTarget();
+    G.spawn = setTimeout(spawnLoop, Math.max(380, 800 - (30 - G.left) * 14));
+  }
+  function startGame() {
+    if (G.on) return;
+    if (!me) { goStep1(); return; }
+    if (!sb) { toast("No hay conexión con el servidor"); return; }
+    G.on = true; G.score = 0; G.left = 30; gameShow();
+    clearTargets(); $("arenaMsg").hidden = true; $("gMsg").textContent = ""; $("playBtn").disabled = true;
+    $("arena").scrollIntoView({ block: "center", behavior: "auto" });
+    G.tick = setInterval(function () { G.left--; gameShow(); if (G.left <= 0) endGame(); }, 1000);
+    spawnLoop();
+  }
+  function endGame() {
+    G.on = false; clearInterval(G.tick); clearTimeout(G.spawn); clearTargets();
+    $("playBtn").disabled = false; $("playBtn").textContent = "Jugar otra vez";
+    var m = $("arenaMsg"), final = Math.max(0, G.score), id = me, name = nameOf(me);
+    var prev = scores[id] ? scores[id].best : 0;
+    m.hidden = false; m.textContent = "Hiciste " + final + (final === 1 ? " punto" : " puntos");
+    if (final > prev) {
+      scores[id] = { name: name, best: final }; renderRank();
+      $("gMsg").textContent = "Guardando tu récord...";
+      sb.from("halloween_scores").upsert({ slug: id, name: name, best: final, updated_at: new Date().toISOString() }).then(function (r) {
+        $("gMsg").textContent = r && r.error ? "No se pudo guardar tu récord. Intenta de nuevo." : "¡Nuevo récord! " + final + " puntos";
+      });
+    } else {
+      $("gMsg").textContent = "Tu récord sigue en " + prev + ". ¡Otra vez!";
+    }
+  }
+  $("arena").addEventListener("pointerdown", function (e) {
+    var t = e.target.closest ? e.target.closest(".tgt") : null;
+    if (!t || !G.on) return;
+    e.preventDefault();
+    var good = t.getAttribute("data-k") === "g";
+    G.score += good ? 1 : -2;
+    if (!good && navigator.vibrate) navigator.vibrate(80);
+    if (t.parentNode) t.parentNode.removeChild(t);
+    gameShow();
+  });
+
   var d = Math.ceil((FECHA - new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) / 86400000);
   $("countdown").textContent = d > 1 ? "Faltan " + d + " días" : d === 1 ? "Es mañana" : d === 0 ? "Es hoy" : "Ya pasó la junta";
 
@@ -682,6 +777,12 @@ img { max-width: 100%; }
       if (r.error || !r.data || inflight > 0 || Date.now() < holdUntil) return;
       var next = {}; r.data.forEach(function (row) { next[row.slug] = row.data || {}; });
       people = next; renderAll();
+    });
+    sb.from("halloween_scores").select("slug,name,best").then(function (r) {
+      if (r.error || !r.data) return;
+      var n = {}; r.data.forEach(function (row) { n[row.slug] = { name: row.name, best: row.best }; });
+      if (me && scores[me] && (!n[me] || scores[me].best > n[me].best)) n[me] = scores[me];
+      scores = n; renderRank();
     });
     sb.from("halloween_riddle_winner").select("slug,name").eq("id", 1).maybeSingle().then(function (r) {
       if (r.error) return;
@@ -698,6 +799,7 @@ img { max-width: 100%; }
       sb.channel("sin-nombres")
         .on("postgres_changes", { event: "*", schema: "public", table: "halloween_signups" }, pull)
         .on("postgres_changes", { event: "*", schema: "public", table: "halloween_riddle_winner" }, pull)
+        .on("postgres_changes", { event: "*", schema: "public", table: "halloween_scores" }, pull)
         .subscribe();
     } catch (e) {}
   }
